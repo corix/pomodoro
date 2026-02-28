@@ -7,7 +7,58 @@
     <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-    <div id="app"></div>
+    <div id="app">
+        <main class="timer" role="timer" aria-live="polite">
+            <!-- Preset buttons: work:break (minutes) -->
+            <div class="timer__presets" id="presets">
+                <button type="button" class="timer__btn timer__btn--new-pomodoro" data-work="25" data-break="5" aria-label="New pomodoro: 25 min work, 5 min break">25:5</button>
+                <button type="button" class="timer__btn timer__btn--new-pomodoro" data-work="45" data-break="15" aria-label="New pomodoro: 45 min work, 15 min break">45:15</button>
+            </div>
+            <!-- Running / paused status -->
+            <p class="timer__status" id="timer-status" aria-live="polite">Pomodoro is paused</p>
+            <!-- Timers (left) + Start/Stop (right) -->
+            <div class="timer__layout">
+                <div class="timer__segments">
+                    <div class="timer__segment timer__segment--work" id="segment-work" data-mode="work" aria-label="Work timer">
+                        <span class="timer__segment-label">Work</span>
+                        <div class="timer__segment-row">
+                            <button type="button" class="timer__btn timer__btn--icon timer__btn--secondary timer__btn--restart" data-mode="work" aria-label="Restart current timer">
+                                <svg class="timer__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 12a9 9 0 1 1-2.636-6.364M21 3v6h-6"/>
+                                </svg>
+                            </button>
+                            <input type="text" class="timer__time timer__time--input" id="time-display-work" aria-label="Work time remaining" inputmode="numeric" placeholder="0:00" />
+                            <button type="button" class="timer__btn timer__btn--icon timer__btn--secondary timer__btn--skip" aria-label="Skip to next segment">
+                                <svg class="timer__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="timer__segment timer__segment--break" id="segment-break" data-mode="break" aria-label="Break timer">
+                        <span class="timer__segment-label">Break</span>
+                        <div class="timer__segment-row">
+                            <button type="button" class="timer__btn timer__btn--icon timer__btn--secondary timer__btn--restart" data-mode="break" aria-label="Restart current timer">
+                                <svg class="timer__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 12a9 9 0 1 1-2.636-6.364M21 3v6h-6"/>
+                                </svg>
+                            </button>
+                            <input type="text" class="timer__time timer__time--input" id="time-display-break" aria-label="Break time remaining" inputmode="numeric" placeholder="0:00" />
+                            <button type="button" class="timer__btn timer__btn--icon timer__btn--secondary timer__btn--skip" aria-label="Skip to next segment">
+                                <svg class="timer__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Start/Stop (play/pause) -->
+                <div class="timer__controls-main">
+                    <button type="button"
+                        class="timer__btn timer__btn--pause" id="pause-btn" data-state="stopped" aria-label="Start timer">
+                        <svg class="timer__icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                        <svg class="timer__icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>
