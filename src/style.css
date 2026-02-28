@@ -304,12 +304,12 @@ body {
 }
 
 .timer__btn--pause .timer__icon-play,
-.timer__btn--pause .timer__icon-pause {
-  width: 3rem;
-  height: 3rem;
+.timer__btn--pause .timer__icon-stop {
+  width: 4rem;
+  height: 4rem;
 }
 
-.timer__btn--pause .timer__icon-pause {
+.timer__btn--pause .timer__icon-stop {
   display: none;
 }
 
@@ -322,7 +322,7 @@ body {
   display: none;
 }
 
-.timer__btn--pause[data-state="running"] .timer__icon-pause {
+.timer__btn--pause[data-state="running"] .timer__icon-stop {
   display: block;
 }
 

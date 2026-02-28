@@ -19,7 +19,7 @@ let state = {
   breakRemainingSeconds: BREAK_SECONDS,
   workDuration: WORK_SECONDS,
   breakDuration: BREAK_SECONDS,
-  activeMode: 'work',
+  currentMode: 'work',
   isRunning: false,
   intervalId: null,
 };
@@ -66,19 +66,19 @@ function parseTimeInput(str) {
   return seconds > 60 * 60 ? MAX_DURATION_SECONDS : seconds;
 }
 
-function getActiveRemaining() {
-  return state.activeMode === 'work' ? state.workRemainingSeconds : state.breakRemainingSeconds;
+function getTimeRemaining() {
+  return state.currentMode === 'work' ? state.workRemainingSeconds : state.breakRemainingSeconds;
 }
 
-function setActiveRemaining(seconds) {
-  if (state.activeMode === 'work') {
+function setTimeRemaining(seconds) {
+  if (state.currentMode === 'work') {
     state.workRemainingSeconds = seconds;
   } else {
     state.breakRemainingSeconds = seconds;
   }
 }
 
-function getSegmentDuration(mode) {
+function getDuration(mode) {
   return mode === 'work' ? state.workDuration : state.breakDuration;
 }
 
@@ -90,10 +90,10 @@ function render() {
     el.timeDisplayBreak.value = formatTime(state.breakRemainingSeconds);
   }
 
-  el.segmentWork.classList.toggle('timer__segment--active', state.activeMode === 'work');
-  el.segmentBreak.classList.toggle('timer__segment--active', state.activeMode === 'break');
-  el.segmentWork.setAttribute('aria-current', state.activeMode === 'work' ? 'true' : 'false');
-  el.segmentBreak.setAttribute('aria-current', state.activeMode === 'break' ? 'true' : 'false');
+  el.segmentWork.classList.toggle('timer__segment--active', state.currentMode === 'work');
+  el.segmentBreak.classList.toggle('timer__segment--active', state.currentMode === 'break');
+  el.segmentWork.setAttribute('aria-current', state.currentMode === 'work' ? 'true' : 'false');
+  el.segmentBreak.setAttribute('aria-current', state.currentMode === 'break' ? 'true' : 'false');
 
   if (state.isRunning) {
     el.timerStatus.innerHTML = 'Pomodoro is <span class="timer__status-highlight">running</span>';
@@ -105,23 +105,23 @@ function render() {
 }
 
 function tick() {
-  const current = getActiveRemaining();
-  if (current <= 0) return;
-  setActiveRemaining(current - 1);
-  if (getActiveRemaining() <= 0) {
-    setActiveRemaining(getSegmentDuration(state.activeMode));
-    state.activeMode = state.activeMode === 'work' ? 'break' : 'work';
+  const remaining = getTimeRemaining();
+  if (remaining <= 0) return;
+  setTimeRemaining(remaining - 1);
+  if (getTimeRemaining() <= 0) {
+    setTimeRemaining(getDuration(state.currentMode));
+    state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
   }
   render();
 }
 
-function setActiveMode(mode) {
-  if (state.isRunning) pause();
-  state.activeMode = mode;
+function setCurrentMode(mode) {
+  if (state.isRunning) stop();
+  state.currentMode = mode;
   render();
 }
 
-function pause() {
+function stop() {
   if (!state.isRunning) return;
   state.isRunning = false;
   if (state.intervalId !== null) {
@@ -138,43 +138,43 @@ function start() {
   render();
 }
 
-function togglePause() {
-  if (state.isRunning) pause();
+function handlePlayPause() {
+  if (state.isRunning) stop();
   else start();
 }
 
 function restart() {
-  pause();
-  setActiveRemaining(getSegmentDuration(state.activeMode));
+  stop();
+  setTimeRemaining(getDuration(state.currentMode));
   render();
 }
 
 function skip() {
-  if (state.activeMode === 'work') {
+  if (state.currentMode === 'work') {
     state.workRemainingSeconds = state.workDuration;
   } else {
     state.breakRemainingSeconds = state.breakDuration;
   }
-  state.activeMode = state.activeMode === 'work' ? 'break' : 'work';
+  state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
   render();
 }
 
-function newPomodoroPreset(workMinutes, breakMinutes) {
-  pause();
+function applyPreset(workMinutes, breakMinutes) {
+  stop();
   const workSec = workMinutes * 60;
   const breakSec = breakMinutes * 60;
   state.workRemainingSeconds = workSec;
   state.breakRemainingSeconds = breakSec;
   state.workDuration = workSec;
   state.breakDuration = breakSec;
-  state.activeMode = 'work';
+  state.currentMode = 'work';
   render();
 }
 
 function init() {
   render();
 
-  el.pauseBtn.addEventListener('click', togglePause);
+  el.pauseBtn.addEventListener('click', handlePlayPause);
   el.timer.addEventListener('click', (e) => {
     if (e.target.closest('.timer__btn--restart')) restart();
     if (e.target.closest('.timer__btn--skip')) skip();
@@ -184,7 +184,7 @@ function init() {
     if (!btn) return;
     const work = parseInt(btn.dataset.work, 10);
     const breakMin = parseInt(btn.dataset.break, 10);
-    if (!Number.isNaN(work) && !Number.isNaN(breakMin)) newPomodoroPreset(work, breakMin);
+    if (!Number.isNaN(work) && !Number.isNaN(breakMin)) applyPreset(work, breakMin);
   });
 
   el.timeDisplayWork.addEventListener('blur', () => {
