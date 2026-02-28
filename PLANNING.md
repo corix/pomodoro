@@ -11,7 +11,7 @@ This is a lightweight web browser app. It's a "pomodoro" timer used for alternat
 
 ## Features
 
-### Phase 1 —- DONE ✓
+### Stage 1 —- DONE ✓
 * Display a countdown (increments in minutes and seconds)
 * Display which "mode" the user is in, work or break
     * Duration of work segment is 25 minutes
@@ -19,12 +19,12 @@ This is a lightweight web browser app. It's a "pomodoro" timer used for alternat
 * Start, pause, reset, skip to next segment
 * Adjust segment duration: user can change the duration of work and break segments independently
 
-### Phase 2 (current)
+### Stage 2 (current)
 * Persist on browser reload (localstorage)
 * Visual progress indicator on active timer
 * Play sound when the countdown approaches zero
 
-### Phase 3
+### Stage 3
 * Pomo counter / show how much time has passed in work/break
 * Dark/light mode
 
