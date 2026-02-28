@@ -2,6 +2,64 @@
 
 const WORK_SECONDS = 25 * 60;
 const BREAK_SECONDS = 5 * 60;
+const STORAGE_KEY = 'pomodoro-state';
+
+let audioContext = null;
+
+function getAudioContext() {
+  if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  return audioContext;
+}
+
+function playBeep(options = {}) {
+  const { frequency = 700, duration = 0.15 } = options;
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = frequency;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.06, t0);
+    gain.gain.exponentialRampToValueAtTime(0.004, t0 + duration);
+    osc.start(t0);
+    osc.stop(t0 + duration);
+
+    const overtone = ctx.createOscillator();
+    const overtoneGain = ctx.createGain();
+    overtone.type = 'sine';
+    overtone.frequency.value = frequency * 2.37;
+    overtone.connect(overtoneGain);
+    overtoneGain.connect(ctx.destination);
+    overtoneGain.gain.setValueAtTime(0.025, t0);
+    overtoneGain.gain.exponentialRampToValueAtTime(0.001, t0 + duration * 0.6);
+    overtone.start(t0);
+    overtone.stop(t0 + duration * 0.6);
+  } catch (_) {}
+}
+
+function playSegmentEndSound() {
+  playBeep({ frequency: 440, duration: 1.15 });
+}
+
+function playDingDong() {
+  const pentatonic = [523, 587, 659, 784, 440];
+  const high = pentatonic[3];
+  const low = pentatonic[0];
+  const noteDuration = 0.045;
+  const gapMs = 20;
+  const trillLength = 1.5;
+  const cycleMs = noteDuration * 1000 + gapMs;
+  const count = Math.floor((trillLength * 1000) / cycleMs);
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => playBeep({ frequency: i % 2 === 0 ? high : low, duration: noteDuration }), i * cycleMs);
+  }
+}
+
 
 const el = {
   timer: document.querySelector('.timer'),
@@ -12,6 +70,8 @@ const el = {
   timeDisplayBreak: document.getElementById('time-display-break'),
   pauseBtn: document.getElementById('pause-btn'),
   presets: document.getElementById('presets'),
+  progressWork: document.getElementById('progress-work'),
+  progressBreak: document.getElementById('progress-break'),
 };
 
 let state = {
@@ -82,6 +142,50 @@ function getDuration(mode) {
   return mode === 'work' ? state.workDuration : state.breakDuration;
 }
 
+function saveState() {
+  const payload = {
+    workRemainingSeconds: state.workRemainingSeconds,
+    breakRemainingSeconds: state.breakRemainingSeconds,
+    workDuration: state.workDuration,
+    breakDuration: state.breakDuration,
+    currentMode: state.currentMode,
+    isRunning: state.isRunning,
+  };
+  if (state.isRunning) {
+    payload.lastSavedAt = Date.now();
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (_) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    const required = ['workRemainingSeconds', 'breakRemainingSeconds', 'workDuration', 'breakDuration', 'currentMode', 'isRunning'];
+    if (!required.every((k) => typeof data[k] === 'number' || (k === 'currentMode' && (data[k] === 'work' || data[k] === 'break')) || (k === 'isRunning' && typeof data[k] === 'boolean'))) return;
+    state.workRemainingSeconds = Math.max(0, Math.floor(data.workRemainingSeconds));
+    state.breakRemainingSeconds = Math.max(0, Math.floor(data.breakRemainingSeconds));
+    state.workDuration = Math.max(1, Math.floor(data.workDuration));
+    state.breakDuration = Math.max(1, Math.floor(data.breakDuration));
+    state.currentMode = data.currentMode === 'break' ? 'break' : 'work';
+    state.isRunning = Boolean(data.isRunning);
+
+    if (state.isRunning && typeof data.lastSavedAt === 'number') {
+      const elapsed = Math.floor((Date.now() - data.lastSavedAt) / 1000);
+      const remaining = getTimeRemaining();
+      const newRemaining = Math.max(0, remaining - elapsed);
+      setTimeRemaining(newRemaining);
+      if (newRemaining <= 0) {
+        setTimeRemaining(getDuration(state.currentMode));
+        state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
+      }
+    }
+  } catch (_) {}
+}
+
 function render() {
   if (document.activeElement !== el.timeDisplayWork) {
     el.timeDisplayWork.value = formatTime(state.workRemainingSeconds);
@@ -102,22 +206,37 @@ function render() {
   }
   el.pauseBtn.setAttribute('aria-label', state.isRunning ? 'Stop timer' : 'Start timer');
   el.pauseBtn.setAttribute('data-state', state.isRunning ? 'running' : 'stopped');
+
+  const workDuration = getDuration('work');
+  const breakDuration = getDuration('break');
+  const workProgress = workDuration > 0 ? 1 - state.workRemainingSeconds / workDuration : 0;
+  const breakProgress = breakDuration > 0 ? 1 - state.breakRemainingSeconds / breakDuration : 0;
+  el.progressWork.style.setProperty('--progress', String(workProgress));
+  el.progressBreak.style.setProperty('--progress', String(breakProgress));
 }
 
 function tick() {
   const remaining = getTimeRemaining();
   if (remaining <= 0) return;
   setTimeRemaining(remaining - 1);
-  if (getTimeRemaining() <= 0) {
+  const nowRemaining = getTimeRemaining();
+  if (nowRemaining >= 1 && nowRemaining <= 5) {
+    const pentatonic = [784, 659, 587, 523, 440];
+    playBeep({ frequency: pentatonic[5 - nowRemaining], duration: 0.5 });
+  }
+  if (nowRemaining <= 0) {
+    playDingDong();
     setTimeRemaining(getDuration(state.currentMode));
     state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
   }
+  saveState();
   render();
 }
 
 function setCurrentMode(mode) {
   if (state.isRunning) stop();
   state.currentMode = mode;
+  saveState();
   render();
 }
 
@@ -128,13 +247,19 @@ function stop() {
     clearInterval(state.intervalId);
     state.intervalId = null;
   }
+  saveState();
   render();
 }
 
 function start() {
   if (state.isRunning) return;
+  getAudioContext();
+  if (audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
   state.isRunning = true;
   state.intervalId = setInterval(tick, 1000);
+  saveState();
   render();
 }
 
@@ -146,6 +271,7 @@ function handlePlayPause() {
 function restart() {
   stop();
   setTimeRemaining(getDuration(state.currentMode));
+  saveState();
   render();
 }
 
@@ -156,6 +282,7 @@ function skip() {
     state.breakRemainingSeconds = state.breakDuration;
   }
   state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
+  saveState();
   render();
 }
 
@@ -168,10 +295,15 @@ function applyPreset(workMinutes, breakMinutes) {
   state.workDuration = workSec;
   state.breakDuration = breakSec;
   state.currentMode = 'work';
+  saveState();
   render();
 }
 
 function init() {
+  loadState();
+  if (state.isRunning) {
+    state.intervalId = setInterval(tick, 1000);
+  }
   render();
 
   el.pauseBtn.addEventListener('click', handlePlayPause);
@@ -195,6 +327,7 @@ function init() {
     } else {
       el.timeDisplayWork.value = formatTime(state.workRemainingSeconds);
     }
+    saveState();
     render();
   });
   el.timeDisplayWork.addEventListener('keydown', (e) => {
@@ -209,6 +342,7 @@ function init() {
     } else {
       el.timeDisplayBreak.value = formatTime(state.breakRemainingSeconds);
     }
+    saveState();
     render();
   });
   el.timeDisplayBreak.addEventListener('keydown', (e) => {

@@ -209,6 +209,36 @@ body {
   color: var(--color-mode-break);
 }
 
+.timer__progress {
+  width: 100%;
+  height: 4px;
+  background: var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.timer__progress-bar {
+  height: 100%;
+  width: calc(var(--progress, 0) * 100%);
+  border-radius: var(--radius-full);
+  transition: width 0.25s ease;
+}
+
+.timer__segment--work .timer__progress-bar {
+  background: var(--color-mode-work);
+}
+
+.timer__segment--break .timer__progress-bar {
+  background: var(--color-mode-break);
+}
+
+.timer__segment:not(.timer__segment--active) .timer__progress {
+  opacity: 0.35;
+}
+
+.timer__segment--active .timer__progress {
+  opacity: 1;
+}
 
 .timer__segment--active .timer__time--input {
   width: 4.5em;
