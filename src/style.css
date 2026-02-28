@@ -96,6 +96,14 @@ body {
   width: 100%;
   max-width: 36rem;
   padding: var(--space-xl);
+  position: relative;
+}
+
+.mute-corner {
+  position: fixed;
+  top: var(--space-md);
+  right: var(--space-md);
+  z-index: 10;
 }
 
 /* ─── Timer block ─── */
@@ -393,6 +401,20 @@ body {
 .timer__btn--pause[data-state="running"]:active {
   transform: translateY(2px);
   box-shadow: 0 2px 0 var(--color-error-shadow);
+}
+
+/* Mute countdown: show volume when unmuted, muted icon when muted */
+.timer__btn--mute .timer__icon--muted {
+  display: none;
+}
+.timer__btn--mute .timer__icon--volume {
+  display: block;
+}
+.timer__btn--mute[data-muted="true"] .timer__icon--volume {
+  display: none;
+}
+.timer__btn--mute[data-muted="true"] .timer__icon--muted {
+  display: block;
 }
 
 .timer__presets {

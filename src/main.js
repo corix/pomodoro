@@ -11,7 +11,12 @@ function getAudioContext() {
   return audioContext;
 }
 
+function isCountdownMuted() {
+  return state?.muted === true;
+}
+
 function playBeep(options = {}) {
+  if (isCountdownMuted()) return;
   const { frequency = 700, duration = 0.15 } = options;
   try {
     const ctx = getAudioContext();
@@ -47,6 +52,7 @@ function playSegmentEndSound() {
 }
 
 function playDingDong() {
+  if (isCountdownMuted()) return;
   const pentatonic = [523, 587, 659, 784, 440];
   const high = pentatonic[3];
   const low = pentatonic[0];
@@ -72,6 +78,7 @@ const el = {
   presets: document.getElementById('presets'),
   progressWork: document.getElementById('progress-work'),
   progressBreak: document.getElementById('progress-break'),
+  muteBtn: document.getElementById('mute-btn'),
 };
 
 let state = {
@@ -82,6 +89,7 @@ let state = {
   currentMode: 'work',
   isRunning: false,
   intervalId: null,
+  muted: false,
 };
 
 function formatTime(seconds) {
@@ -150,6 +158,7 @@ function saveState() {
     breakDuration: state.breakDuration,
     currentMode: state.currentMode,
     isRunning: state.isRunning,
+    muted: state.muted,
   };
   if (state.isRunning) {
     payload.lastSavedAt = Date.now();
@@ -172,6 +181,7 @@ function loadState() {
     state.breakDuration = Math.max(1, Math.floor(data.breakDuration));
     state.currentMode = data.currentMode === 'break' ? 'break' : 'work';
     state.isRunning = Boolean(data.isRunning);
+    if (typeof data.muted === 'boolean') state.muted = data.muted;
 
     if (state.isRunning && typeof data.lastSavedAt === 'number') {
       const elapsed = Math.floor((Date.now() - data.lastSavedAt) / 1000);
@@ -206,6 +216,11 @@ function render() {
   }
   el.pauseBtn.setAttribute('aria-label', state.isRunning ? 'Stop timer' : 'Start timer');
   el.pauseBtn.setAttribute('data-state', state.isRunning ? 'running' : 'stopped');
+
+  if (el.muteBtn) {
+    el.muteBtn.setAttribute('aria-label', state.muted ? 'Unmute countdown sounds' : 'Mute countdown sounds');
+    el.muteBtn.setAttribute('data-muted', state.muted ? 'true' : 'false');
+  }
 
   const workDuration = getDuration('work');
   const breakDuration = getDuration('break');
@@ -268,6 +283,12 @@ function handlePlayPause() {
   else start();
 }
 
+function toggleMute() {
+  state.muted = !state.muted;
+  saveState();
+  render();
+}
+
 function restart() {
   stop();
   setTimeRemaining(getDuration(state.currentMode));
@@ -307,6 +328,7 @@ function init() {
   render();
 
   el.pauseBtn.addEventListener('click', handlePlayPause);
+  if (el.muteBtn) el.muteBtn.addEventListener('click', toggleMute);
   el.timer.addEventListener('click', (e) => {
     if (e.target.closest('.timer__btn--restart')) restart();
     if (e.target.closest('.timer__btn--skip')) skip();
