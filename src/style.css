@@ -19,11 +19,11 @@
   --color-text-muted: #a1a1aa;
   --color-text-subtle: #71717a;
 
-  /* Work mode (focus) – tomato/warm */
-  --color-mode-work: #e11d48;
-  --color-mode-work-muted: #be123c;
-  --color-mode-work-subtle: #9f1239;
-  --color-mode-work-bg: rgba(225, 29, 72, 0.12);
+  /* Work mode (focus) – purple */
+  --color-mode-work: #8b5cf6;
+  --color-mode-work-muted: #7c3aed;
+  --color-mode-work-subtle: #6d28d9;
+  --color-mode-work-bg: rgba(139, 92, 246, 0.12);
 
   /* Break mode – calm/rest */
   --color-mode-break: #0d9488;
@@ -149,10 +149,11 @@ body {
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-md);
+  padding-top: calc(4px + var(--space-md));
   background: var(--color-bg-muted);
-  border: 2px solid transparent;
   border-radius: var(--radius-lg);
-  transition: border-color 0.15s ease, background 0.15s ease, padding 0.2s ease;
+  transition: background 0.15s ease, padding 0.2s ease;
+  position: relative;
 }
 
 .timer__segment .timer__time,
@@ -180,8 +181,8 @@ body {
 
 .timer__segment--active {
   padding: var(--space-lg);
+  padding-top: calc(4px + var(--space-lg));
   background: var(--color-bg-elevated);
-  border-color: var(--color-border);
 }
 
 .timer__segment--active .timer__time,
@@ -210,17 +211,21 @@ body {
 }
 
 .timer__progress {
-  width: 100%;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
   height: 4px;
   background: var(--color-border-subtle);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   overflow: hidden;
 }
 
 .timer__progress-bar {
   height: 100%;
-  width: calc(var(--progress, 0) * 100%);
-  border-radius: var(--radius-full);
+  width: calc((1 - var(--progress, 0)) * 100%);
+  margin-left: auto;
+  border-radius: 0 var(--radius-lg) 0 0;
   transition: width 0.25s ease;
 }
 
