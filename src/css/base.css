@@ -1,0 +1,190 @@
+/* Base & layout – imported by style.css */
+
+/* ─── Base & layout ─── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body {
+  margin: 0;
+  padding-top: var(--page-top-padding);
+  padding-bottom: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--line-height-normal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+/* Background glow – pulses in time with countdown sounds */
+.glow-pulses {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.glow-pulses .glow,
+.glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+}
+.glow-pulses .glow {
+  background: radial-gradient(
+    ellipse 220% 160% at 50% 50%,
+    var(--glow-color, var(--color-mode-work)) 0%,
+    transparent 72%
+  );
+  transition: opacity 0.5s ease-out;
+}
+.glow-pulses .glow.glow--pulse {
+  animation: glow-pulse 8s ease-out forwards;
+}
+/* First pulse (5s) lowest opacity, last (1s) capped – gentler build-up */
+.glow-pulses .glow.glow--pulse[data-pulse-level="5"] { --glow-opacity-scale: 0.28; }
+.glow-pulses .glow.glow--pulse[data-pulse-level="4"] { --glow-opacity-scale: 0.45; }
+.glow-pulses .glow.glow--pulse[data-pulse-level="3"] { --glow-opacity-scale: 0.62; }
+.glow-pulses .glow.glow--pulse[data-pulse-level="2"] { --glow-opacity-scale: 0.78; }
+.glow-pulses .glow.glow--pulse[data-pulse-level="1"] { --glow-opacity-scale: 0.9; }
+@keyframes glow-pulse {
+  0% { opacity: 0; transform: scale(0.96); }
+  4% { opacity: calc(0.052 * var(--glow-opacity-scale, 1)); transform: scale(1.04); }
+  12% { opacity: calc(0.04 * var(--glow-opacity-scale, 1)); transform: scale(1.02); }
+  22% { opacity: calc(0.03 * var(--glow-opacity-scale, 1)); transform: scale(1.01); }
+  35% { opacity: calc(0.022 * var(--glow-opacity-scale, 1)); transform: scale(1.005); }
+  50% { opacity: calc(0.014 * var(--glow-opacity-scale, 1)); transform: scale(1.002); }
+  65% { opacity: calc(0.009 * var(--glow-opacity-scale, 1)); transform: scale(1); }
+  78% { opacity: calc(0.005 * var(--glow-opacity-scale, 1)); transform: scale(1); }
+  90% { opacity: calc(0.002 * var(--glow-opacity-scale, 1)); transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+/* Radar-style ripple rings (countdown 5–1) – same scale at all viewport sizes */
+.ripples {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
+.ripple-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5vmin;
+  height: 5vmin;
+  transform: translate(-50%, -50%) scale(14);
+  color: color-mix(in srgb, var(--ripple-color, var(--color-mode-work)) 6%, transparent);
+  opacity: 0;
+  animation: ripple-expand 2s linear forwards;
+}
+@keyframes ripple-expand {
+  0% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(14);
+  }
+  35% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(18);
+  }
+  65% {
+    opacity: 0.1;
+    transform: translate(-50%, -50%) scale(21);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(26);
+  }
+}
+
+.ripple-ring--zero {
+  animation: ripple-expand-zero 1s linear forwards;
+}
+@keyframes ripple-expand-zero {
+  0% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(14);
+  }
+  32% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(20);
+  }
+  65% {
+    opacity: 0.1;
+    transform: translate(-50%, -50%) scale(26);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(32);
+  }
+}
+
+#app {
+  width: 100%;
+  max-width: 36rem;
+  padding: var(--space-xl) var(--space-xl) 0;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Timer at top, log below; page scrolls when content overflows. No min-height so empty log doesn't leave a big gap. */
+.timer-viewport {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.timer-viewport > .timer {
+  flex-shrink: 0;
+}
+
+.timer-viewport > .day-log {
+  flex-shrink: 0;
+  padding-left: 0; /* room for delete (x) button so it isn't clipped */
+}
+
+
+.mute-corner {
+  position: fixed;
+  top: var(--space-md);
+  right: var(--space-md);
+  z-index: 10;
+  background: transparent;
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-subtle);
+}
+
+.mute-corner:hover {
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow-pulses .glow.glow--pulse {
+    animation: none;
+  }
+  .ripple-ring,
+  .ripple-ring--zero {
+    animation: none;
+  }
+}

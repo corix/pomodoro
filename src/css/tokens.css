@@ -1,0 +1,86 @@
+/* Design tokens – imported by style.css */
+
+/* ─── Design tokens ─── */
+:root {
+  /* ─── Colors (dark theme + mode) ─── */
+  --color-bg: #0f0f10;
+  --color-bg-elevated: #18181b;
+  --color-bg-muted: #27272a;
+  --color-border: #3f3f46;
+  --color-border-subtle: #27272a;
+  --color-text: #fafafa;
+  --color-text-muted: #a1a1aa;
+  --color-text-subtle: #90909a;
+
+  /* Work mode (focus) – purple */
+  --color-mode-work: #8b5cf6;
+  --color-mode-work-muted: #7c3aed;
+  --color-mode-work-subtle: #6d28d9;
+  --color-mode-work-bg: rgba(139, 92, 246, 0.12);
+  --color-mode-work-skipped: #a78bfa;
+
+  /* Break mode – calm/rest */
+  --color-mode-break: #0d9488;
+  --color-mode-break-muted: #0f766e;
+  --color-mode-break-subtle: #115e59;
+  --color-mode-break-bg: rgba(13, 148, 136, 0.12);
+  --color-mode-break-log: #14b8a6;
+
+  /* Semantic */
+  --color-focus-ring: #3b82f6;
+  --color-error: #ef4444;
+  --color-success: #22c55e;
+  --color-success-shadow: #15803d;
+  --color-error-shadow: #b91c1c;
+
+  /* Log percentage (skipped work) */
+  --color-log-pct: #eab308;
+
+  /* Transition (timer hit zero) – neutral, bright */
+  --color-transition: #fafafa;
+  --color-transition-bg: rgba(250, 250, 250, 0.25);
+  --color-transition-dim: #a0a0a0;
+
+  /* ─── Spacing (xs → xl) ─── */
+  --space-xs: 0.25rem;   /* 4px */
+  --space-sm: 0.5rem;    /* 8px */
+  --space-md: 1rem;      /* 16px */
+  --space-lg: 1.5rem;    /* 24px */
+  --space-xl: 2rem;      /* 32px */
+  --space-2xl: 2.5rem;   /* 40px */
+  --space-3xl: 3rem;    /* 48px */
+
+  /* ─── Typography ─── */
+  --font-body: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.875rem;   /* 14px */
+  --text-base: 1rem;     /* 16px */
+  --text-lg: 1.125rem;   /* 18px */
+  --text-xl: 1.25rem;    /* 20px */
+  --text-2xl: 1.5rem;    /* 24px */
+  --text-3xl: 1.875rem;  /* 30px */
+  --text-timer: 4rem;    /* 64px – large timer display */
+  --text-timer-sm: 2.5rem; /* 40px – compact timer */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+
+  /* ─── Border radius ─── */
+  --radius-sm: 0.25rem;   /* 4px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-lg: 0.75rem;   /* 12px */
+  --radius-xl: 1rem;      /* 16px */
+  --radius-2xl: 1.5rem;   /* 24px – timer segments */
+  --radius-full: 9999px;
+
+  /* Top padding as % of viewport height */
+  --page-top-padding: 10vh;
+}

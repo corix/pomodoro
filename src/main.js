@@ -1,73 +1,17 @@
 // Pomodoro Timer – MVP (both timers visible, auto-switch at zero)
 
+import { getAudioContext, playBeep, playSegmentEndSound, playDingDong } from './audio.js';
+
+// --- Constants ---
 const WORK_SECONDS = 25 * 60;
 const BREAK_SECONDS = 5 * 60;
 const STORAGE_KEY = 'pomodoro-state';
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_DURATION_SECONDS = 55 * 60;
+const VISIBLE_LOG_ENTRIES_DEFAULT = 3;
+const LOG_EXPAND_THRESHOLD = 4;
 
-let audioContext = null;
-
-function getAudioContext() {
-  if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  return audioContext;
-}
-
-function isCountdownMuted() {
-  return state?.muted === true;
-}
-
-function playBeep(options = {}) {
-  if (isCountdownMuted()) return;
-  const { frequency = 700, duration = 0.15 } = options;
-  try {
-    const ctx = getAudioContext();
-    if (ctx.state === 'suspended') ctx.resume();
-    const t0 = ctx.currentTime;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = frequency;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.06, t0);
-    gain.gain.exponentialRampToValueAtTime(0.004, t0 + duration);
-    osc.start(t0);
-    osc.stop(t0 + duration);
-
-    const overtone = ctx.createOscillator();
-    const overtoneGain = ctx.createGain();
-    overtone.type = 'sine';
-    overtone.frequency.value = frequency * 2.37;
-    overtone.connect(overtoneGain);
-    overtoneGain.connect(ctx.destination);
-    overtoneGain.gain.setValueAtTime(0.025, t0);
-    overtoneGain.gain.exponentialRampToValueAtTime(0.001, t0 + duration * 0.6);
-    overtone.start(t0);
-    overtone.stop(t0 + duration * 0.6);
-  } catch (_) {}
-}
-
-function playSegmentEndSound() {
-  playBeep({ frequency: 440, duration: 1.15 });
-}
-
-function playDingDong() {
-  if (isCountdownMuted()) return;
-  const pentatonic = [659, 784, 880, 1046, 554];
-  const high = pentatonic[3];
-  const low = pentatonic[0];
-  const noteDuration = 0.045;
-  const gapMs = 20;
-  const trillLength = 1.5;
-  const cycleMs = noteDuration * 1000 + gapMs;
-  const count = Math.floor((trillLength * 1000) / cycleMs);
-  for (let i = 0; i < count; i++) {
-    setTimeout(() => playBeep({ frequency: i % 2 === 0 ? high : low, duration: noteDuration }), i * cycleMs);
-  }
-}
-
-
+// --- DOM refs ---
 const el = {
   timer: document.querySelector('.timer'),
   timerStatus: document.getElementById('timer-status'),
@@ -92,8 +36,11 @@ const el = {
   dayLogClear: document.getElementById('day-log-clear'),
   dayLogViewAll: document.getElementById('day-log-view-all'),
   dayLogHide: document.getElementById('day-log-hide'),
+  timerLiveValue: document.getElementById('timer-live-value'),
+  timeInputError: document.getElementById('time-input-error'),
 };
 
+// --- State ---
 let state = {
   workRemainingSeconds: WORK_SECONDS,
   breakRemainingSeconds: BREAK_SECONDS,
@@ -103,6 +50,8 @@ let state = {
   isRunning: false,
   intervalId: null,
   muted: false,
+  /** When running, time of last save (for resync when tab becomes visible). */
+  lastSavedAt: null,
   /** Current "day" starts when first timer runs; cleared after 24h */
   dayStartedAt: null,
   /** Completed work+break cycles this day: { completedAt, workDuration, breakDuration } */
@@ -113,24 +62,46 @@ let state = {
   pendingSkippedWork: null,
 };
 
-let logExpanded = false;
-/** When collapsed, how many entries to show (3 by default; can be 2, 1, 0 after deletes). Reset to min(3, total) when user clicks "hide". */
-let collapsedVisibleCount = 3;
-
-/** Timeout id for revealing remaining entries 3s after all visible were deleted. */
-let revealRemainingTimeoutId = null;
-/** When true, next render adds slide-in animation to first list item (after revealing remaining). */
-let justRevealedRemainingEntries = false;
+// --- Log view state (expand/collapse, visible count, cache for re-render) ---
+let logViewState = {
+  expanded: false,
+  collapsedVisibleCount: VISIBLE_LOG_ENTRIES_DEFAULT,
+  revealRemainingTimeoutId: null,
+  justRevealedRemainingEntries: false,
+  lastRenderedLogKey: '',
+  lastRenderedLogExpanded: false,
+  lastRenderedVisibleCount: -1,
+};
 
 let glowPulseIndex = 0;
-
-/** Cache key for the log list so we don't re-render it every tick (avoids x flicker). */
-let lastRenderedLogKey = '';
-let lastRenderedLogExpanded = false;
-let lastRenderedVisibleCount = -1;
-
 /** Previous mode so we can delay updating the newly active counter until after its scale-up transition. */
 let lastCurrentMode = null;
+/** Last minute value announced to live region. */
+let lastAnnouncedMinute = null;
+
+// --- Format helpers ---
+/** Build a single day-log list item HTML string (cycle or skipped_work, with optional omitBreak). */
+function buildDayLogEntryHtml(entry, index, cycleClass) {
+  const timePart = `<span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}`;
+  const removeBtn = `<button type="button" class="day-log__remove" data-sorted-index="${index}" aria-label="Remove entry"><svg class="day-log__remove-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+  if (entry.type === 'skipped_work') {
+    const workPart = `<span class="day-log__dur day-log__dur--work-skipped">${formatDuration(entry.workElapsedSeconds)}</span>`;
+    if (entry.omitBreak) {
+      return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
+    }
+    const breakElapsed = entry.breakElapsedSeconds ?? 0;
+    const breakShort = typeof entry.intendedBreakDuration === 'number' && breakElapsed < entry.intendedBreakDuration;
+    const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
+    return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(breakElapsed)}</span> ${timePart}</span></li>`;
+  }
+  const workPart = `<span class="day-log__dur day-log__dur--work">${formatDuration(entry.workDuration)}</span>`;
+  if (entry.omitBreak) {
+    return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
+  }
+  const breakShort = typeof entry.intendedBreakDuration === 'number' && entry.breakDuration < entry.intendedBreakDuration;
+  const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
+  return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(entry.breakDuration)}</span> ${timePart}</span></li>`;
+}
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -154,8 +125,6 @@ function formatDuration(seconds) {
   if (s === 0) return `${m}m`;
   return `${m}m ${s}s`;
 }
-
-const MAX_DURATION_SECONDS = 55 * 60;
 
 /** Parse "M:SS", "MM:SS", "M", "10s", "5m", "4m30s". Returns seconds or null if invalid. Values > 1 hour cap at 55 min. */
 function parseTimeInput(str) {
@@ -191,6 +160,7 @@ function parseTimeInput(str) {
   return seconds > 60 * 60 ? MAX_DURATION_SECONDS : seconds;
 }
 
+// --- State helpers ---
 function getTimeRemaining() {
   return state.currentMode === 'work' ? state.workRemainingSeconds : state.breakRemainingSeconds;
 }
@@ -255,6 +225,7 @@ function ensureDayStarted() {
   }
 }
 
+// --- Persistence ---
 function saveState() {
   const payload = {
     workRemainingSeconds: state.workRemainingSeconds,
@@ -270,11 +241,21 @@ function saveState() {
     pendingSkippedWork: state.pendingSkippedWork,
   };
   if (state.isRunning) {
-    payload.lastSavedAt = Date.now();
+    state.lastSavedAt = Date.now();
+    payload.lastSavedAt = state.lastSavedAt;
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (_) {}
+}
+
+function isValidSavedState(data) {
+  if (!data || typeof data !== 'object') return false;
+  const numKeys = ['workRemainingSeconds', 'breakRemainingSeconds', 'workDuration', 'breakDuration'];
+  if (!numKeys.every((k) => typeof data[k] === 'number')) return false;
+  if (data.currentMode !== 'work' && data.currentMode !== 'break') return false;
+  if (typeof data.isRunning !== 'boolean') return false;
+  return true;
 }
 
 function loadState() {
@@ -282,8 +263,7 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const data = JSON.parse(raw);
-    const required = ['workRemainingSeconds', 'breakRemainingSeconds', 'workDuration', 'breakDuration', 'currentMode', 'isRunning'];
-    if (!required.every((k) => typeof data[k] === 'number' || (k === 'currentMode' && (data[k] === 'work' || data[k] === 'break')) || (k === 'isRunning' && typeof data[k] === 'boolean'))) return;
+    if (!isValidSavedState(data)) return;
     state.workRemainingSeconds = Math.max(0, Math.floor(data.workRemainingSeconds));
     state.breakRemainingSeconds = Math.max(0, Math.floor(data.breakRemainingSeconds));
     state.workDuration = Math.max(1, Math.floor(data.workDuration));
@@ -314,6 +294,7 @@ function loadState() {
     }
 
     if (state.isRunning && typeof data.lastSavedAt === 'number') {
+      state.lastSavedAt = data.lastSavedAt;
       const elapsed = Math.floor((Date.now() - data.lastSavedAt) / 1000);
       const remaining = getTimeRemaining();
       const newRemaining = Math.max(0, remaining - elapsed);
@@ -326,18 +307,65 @@ function loadState() {
   } catch (_) {}
 }
 
-function render() {
+// --- Render ---
+function updateTimeDisplay(displayEl, seconds) {
+  if (!displayEl || document.activeElement === displayEl) return;
+  displayEl.value = formatTime(seconds);
+}
+
+/** Update the live region with current time when the minute value changes. */
+function updateTimerLiveRegion() {
+  const remaining = getTimeRemaining();
+  const min = Math.floor(remaining / 60);
+  if (lastAnnouncedMinute !== min && el.timerLiveValue) {
+    lastAnnouncedMinute = min;
+    el.timerLiveValue.textContent = formatTime(remaining);
+  }
+}
+
+/** Update progress bar CSS variables from current state. */
+function updateProgressBars() {
+  const workDuration = getDuration('work');
+  const breakDuration = getDuration('break');
+  const workProgress = workDuration > 0 ? 1 - state.workRemainingSeconds / workDuration : 0;
+  const breakProgress = breakDuration > 0 ? 1 - state.breakRemainingSeconds / breakDuration : 0;
+  el.progressWork.style.setProperty('--progress', String(workProgress));
+  el.progressBreak.style.setProperty('--progress', String(breakProgress));
+}
+
+/** Apply segment control visibility (classes and button .hidden). Shared by full render and tick-only path. */
+function applySegmentControlVisibility() {
   const workElapsed = state.workDuration - state.workRemainingSeconds;
   const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
   const hideWorkControls = state.currentMode === 'work' && !state.isRunning && workElapsed < 1;
   const hideBreakControls = state.currentMode === 'break' && breakElapsed < 1 && state.isRunning;
   const hideBreakRestartBtn = state.currentMode === 'break' && breakElapsed < 1;
-
-  el.segmentWork.classList.toggle('timer__segment--active', state.currentMode === 'work');
-  el.segmentBreak.classList.toggle('timer__segment--active', state.currentMode === 'break');
   el.segmentWork.classList.toggle('timer__segment--controls-hidden', hideWorkControls);
   el.segmentBreak.classList.toggle('timer__segment--controls-hidden', hideBreakControls);
   el.segmentBreak.classList.toggle('timer__segment--break-restart-hidden', hideBreakRestartBtn);
+  if (el.restartWorkBtn) el.restartWorkBtn.hidden = hideWorkControls;
+  if (el.skipWorkBtn) el.skipWorkBtn.hidden = hideWorkControls;
+  if (el.restartBreakBtn) el.restartBreakBtn.hidden = hideBreakRestartBtn;
+  if (el.skipBreakBtn) {
+    el.skipBreakBtn.hidden = hideBreakControls;
+    const showSkipIcon = !hideBreakControls && state.currentMode === 'break' && !state.isRunning && breakElapsed < 1;
+    el.skipBreakBtn.classList.toggle('timer__btn--break-skip-icon', showSkipIcon);
+    if (!el.skipBreakBtn.hidden) el.skipBreakBtn.setAttribute('aria-label', 'Complete break and continue');
+  }
+}
+
+/** Lightweight update for tick: time displays, progress bars, and segment control visibility. Use when log and mode are unchanged. */
+function renderTimeAndProgressOnly() {
+  updateTimeDisplay(el.timeDisplayWork, state.workRemainingSeconds);
+  updateTimeDisplay(el.timeDisplayBreak, state.breakRemainingSeconds);
+  updateTimerLiveRegion();
+  updateProgressBars();
+  applySegmentControlVisibility();
+}
+
+function renderTimerUI() {
+  el.segmentWork.classList.toggle('timer__segment--active', state.currentMode === 'work');
+  el.segmentBreak.classList.toggle('timer__segment--active', state.currentMode === 'break');
   el.segmentWork.setAttribute('aria-current', state.currentMode === 'work' ? 'true' : 'false');
   el.segmentBreak.setAttribute('aria-current', state.currentMode === 'break' ? 'true' : 'false');
 
@@ -349,6 +377,7 @@ function render() {
     el.timerStatus.textContent = 'Timer is paused';
   }
   el.pauseBtn.setAttribute('aria-label', state.isRunning ? 'Stop timer' : 'Start timer');
+  el.pauseBtn.setAttribute('aria-pressed', state.isRunning ? 'true' : 'false');
   el.pauseBtn.setAttribute('data-state', state.isRunning ? 'running' : 'stopped');
 
   if (el.muteBtn) {
@@ -356,27 +385,13 @@ function render() {
     el.muteBtn.setAttribute('data-muted', state.muted ? 'true' : 'false');
   }
 
-  const workDuration = getDuration('work');
-  const breakDuration = getDuration('break');
-  const workProgress = workDuration > 0 ? 1 - state.workRemainingSeconds / workDuration : 0;
-  const breakProgress = breakDuration > 0 ? 1 - state.breakRemainingSeconds / breakDuration : 0;
-  el.progressWork.style.setProperty('--progress', String(workProgress));
-  el.progressBreak.style.setProperty('--progress', String(breakProgress));
+  updateProgressBars();
+  applySegmentControlVisibility();
+}
 
-  if (el.restartWorkBtn) el.restartWorkBtn.hidden = hideWorkControls;
-  if (el.skipWorkBtn) el.skipWorkBtn.hidden = hideWorkControls;
-  if (el.restartBreakBtn) el.restartBreakBtn.hidden = hideBreakRestartBtn;
-  if (el.skipBreakBtn) {
-    el.skipBreakBtn.hidden = hideBreakControls;
-    const showSkipIcon = !hideBreakControls && state.currentMode === 'break' && !state.isRunning && breakElapsed < 1;
-    el.skipBreakBtn.classList.toggle('timer__btn--break-skip-icon', showSkipIcon);
-    if (!el.skipBreakBtn.hidden) {
-      el.skipBreakBtn.setAttribute('aria-label', 'Complete break and continue');
-    }
-  }
-
-  if (el.dayLogCycles) {
-    const wasLogExpanded = lastRenderedLogExpanded;
+function renderDayLog() {
+  if (!el.dayLogCycles) return;
+    const wasLogExpanded = logViewState.lastRenderedLogExpanded;
     const totalEntries = state.completedCycles.length;
     if (el.dayLogSummary) {
       if (totalEntries === 0) {
@@ -394,65 +409,46 @@ function render() {
     }
     const sorted = [...state.completedCycles].sort((a, b) => b.completedAt - a.completedAt);
     const logKey = sorted.map((e) => e.completedAt).join(',');
-    const maxVisibleDefault = 3;
-    const prevEntryCount = lastRenderedLogKey ? lastRenderedLogKey.split(',').length : 0;
+    const prevEntryCount = logViewState.lastRenderedLogKey ? logViewState.lastRenderedLogKey.split(',').length : 0;
     if (sorted.length > prevEntryCount) {
-      if (prevEntryCount <= 3 && sorted.length >= 4) {
-        logExpanded = false;
-        collapsedVisibleCount = 3;
-      } else if (!logExpanded) {
+      if (prevEntryCount <= VISIBLE_LOG_ENTRIES_DEFAULT && sorted.length >= LOG_EXPAND_THRESHOLD) {
+        logViewState.expanded = false;
+        logViewState.collapsedVisibleCount = VISIBLE_LOG_ENTRIES_DEFAULT;
+      } else if (!logViewState.expanded) {
         const addedCount = sorted.length - prevEntryCount;
-        collapsedVisibleCount = Math.min(3, collapsedVisibleCount + addedCount);
+        logViewState.collapsedVisibleCount = Math.min(VISIBLE_LOG_ENTRIES_DEFAULT, logViewState.collapsedVisibleCount + addedCount);
       }
     }
-    if (sorted.length >= 4 && !logExpanded) {
-      collapsedVisibleCount = Math.min(collapsedVisibleCount, 3);
+    if (sorted.length >= LOG_EXPAND_THRESHOLD && !logViewState.expanded) {
+      logViewState.collapsedVisibleCount = Math.min(logViewState.collapsedVisibleCount, VISIBLE_LOG_ENTRIES_DEFAULT);
     }
-    if (sorted.length < 4 && logExpanded) {
-      logExpanded = false;
-      collapsedVisibleCount = Math.min(3, sorted.length);
+    if (sorted.length < LOG_EXPAND_THRESHOLD && logViewState.expanded) {
+      logViewState.expanded = false;
+      logViewState.collapsedVisibleCount = Math.min(VISIBLE_LOG_ENTRIES_DEFAULT, sorted.length);
     }
-    const visibleCount = logExpanded ? sorted.length : Math.min(collapsedVisibleCount, sorted.length);
+    const visibleCount = logViewState.expanded ? sorted.length : Math.min(logViewState.collapsedVisibleCount, sorted.length);
     const visibleEntries = sorted.slice(0, visibleCount);
-    const logViewChanged = logKey !== lastRenderedLogKey || logExpanded !== lastRenderedLogExpanded || visibleCount !== lastRenderedVisibleCount;
+    const logViewChanged = logKey !== logViewState.lastRenderedLogKey || logViewState.expanded !== logViewState.lastRenderedLogExpanded || visibleCount !== logViewState.lastRenderedVisibleCount;
     if (logViewChanged) {
-      const prevCount = lastRenderedLogKey ? lastRenderedLogKey.split(',').length : 0;
-      lastRenderedLogKey = logKey;
-      lastRenderedLogExpanded = logExpanded;
-      lastRenderedVisibleCount = visibleCount;
+      const prevCount = logViewState.lastRenderedLogKey ? logViewState.lastRenderedLogKey.split(',').length : 0;
+      logViewState.lastRenderedLogKey = logKey;
+      logViewState.lastRenderedLogExpanded = logViewState.expanded;
+      logViewState.lastRenderedVisibleCount = visibleCount;
       const isNewEntry = sorted.length > prevCount;
-      const animateNewEntry = isNewEntry && (prevCount < 3 || logExpanded || visibleCount !== 3);
-      const useFadeInForNew = isNewEntry && !animateNewEntry && (!logExpanded || totalEntries <= 3);
+      const animateNewEntry = isNewEntry && (prevCount < VISIBLE_LOG_ENTRIES_DEFAULT || logViewState.expanded || visibleCount !== VISIBLE_LOG_ENTRIES_DEFAULT);
+      const useFadeInForNew = isNewEntry && !animateNewEntry && (!logViewState.expanded || totalEntries <= VISIBLE_LOG_ENTRIES_DEFAULT);
       const isFirstEntryReplacingSummary = isNewEntry && prevCount === 0;
       el.dayLogCycles.innerHTML = visibleEntries
-      .map((entry, i) => {
-        let cycleClass = 'day-log__cycle';
-        if (i === 0 && isFirstEntryReplacingSummary) cycleClass += ' day-log__cycle--push-up';
-        else if (i === 0 && animateNewEntry) cycleClass += ' day-log__cycle--new';
-        else if (i === 0 && useFadeInForNew) cycleClass += ' day-log__cycle--fade-in';
-        const timePart = `<span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}`;
-        const removeBtn = `<button type="button" class="day-log__remove" data-sorted-index="${i}" aria-label="Remove entry"><svg class="day-log__remove-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
-        if (entry.type === 'skipped_work') {
-          const workPart = `<span class="day-log__dur day-log__dur--work-skipped">${formatDuration(entry.workElapsedSeconds)}</span>`;
-          if (entry.omitBreak) {
-            return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
-          }
-          const breakElapsed = entry.breakElapsedSeconds ?? 0;
-          const breakShort = typeof entry.intendedBreakDuration === 'number' && breakElapsed < entry.intendedBreakDuration;
-          const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
-          return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(breakElapsed)}</span> ${timePart}</span></li>`;
-        }
-        const workPart = `<span class="day-log__dur day-log__dur--work">${formatDuration(entry.workDuration)}</span>`;
-        if (entry.omitBreak) {
-          return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
-        }
-        const breakShort = typeof entry.intendedBreakDuration === 'number' && entry.breakDuration < entry.intendedBreakDuration;
-        const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
-        return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(entry.breakDuration)}</span> ${timePart}</span></li>`;
-      })
-      .join('');
-      if (justRevealedRemainingEntries) {
-        justRevealedRemainingEntries = false;
+        .map((entry, i) => {
+          let cycleClass = 'day-log__cycle';
+          if (i === 0 && isFirstEntryReplacingSummary) cycleClass += ' day-log__cycle--push-up';
+          else if (i === 0 && animateNewEntry) cycleClass += ' day-log__cycle--new';
+          else if (i === 0 && useFadeInForNew) cycleClass += ' day-log__cycle--fade-in';
+          return buildDayLogEntryHtml(entry, i, cycleClass);
+        })
+        .join('');
+      if (logViewState.justRevealedRemainingEntries) {
+        logViewState.justRevealedRemainingEntries = false;
         Array.from(el.dayLogCycles.children).forEach((li) => {
           li.classList.add('day-log__cycle--fade-in');
           li.addEventListener('animationend', () => li.classList.remove('day-log__cycle--fade-in'), { once: true });
@@ -468,8 +464,8 @@ function render() {
         firstLi.addEventListener('animationend', () => firstLi.classList.remove('day-log__cycle--fade-in'), { once: true });
       }
     }
-    const showShowAll = !logExpanded && totalEntries > visibleCount;
-    const showHide = logExpanded && totalEntries >= 4;
+    const showShowAll = !logViewState.expanded && totalEntries > visibleCount;
+    const showHide = logViewState.expanded && totalEntries >= LOG_EXPAND_THRESHOLD;
     if (el.dayLogViewAll) {
       if (showShowAll) {
         const chevronDown = '<svg class="day-log__view-all-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
@@ -494,50 +490,50 @@ function render() {
     if (el.dayLogClear) el.dayLogClear.hidden = !showHide;
     if (el.dayLog) {
       el.dayLog.classList.toggle('day-log--has-entries', totalEntries > 0);
-      el.dayLog.classList.toggle('day-log--expanded', logExpanded);
-      el.dayLog.classList.toggle('day-log--entries-4-plus', totalEntries >= 4);
+      el.dayLog.classList.toggle('day-log--expanded', logViewState.expanded);
+      el.dayLog.classList.toggle('day-log--entries-4-plus', totalEntries >= LOG_EXPAND_THRESHOLD);
     }
   }
 
-  // Defer time display updates to next frame so segment --active transition isn’t glitched by input reflow
-  // Double rAF so counter font-size/width transition runs when segment becomes active (value update after paint)
+function updateTimeDisplays() {
+  updateTimeDisplay(el.timeDisplayWork, state.workRemainingSeconds);
+  updateTimeDisplay(el.timeDisplayBreak, state.breakRemainingSeconds);
+  updateTimerLiveRegion();
+
   const modeJustChanged = lastCurrentMode != null && lastCurrentMode !== state.currentMode;
   lastCurrentMode = state.currentMode;
+  if (modeJustChanged) lastAnnouncedMinute = null;
 
   const COUNTER_TRANSITION_MS = 520;
-
-  function updateWorkDisplay() {
-    if (document.activeElement !== el.timeDisplayWork) {
-      el.timeDisplayWork.value = formatTime(state.workRemainingSeconds);
-    }
-  }
-  function updateBreakDisplay() {
-    if (document.activeElement !== el.timeDisplayBreak) {
-      el.timeDisplayBreak.value = formatTime(state.breakRemainingSeconds);
-    }
-  }
 
   if (modeJustChanged) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (state.currentMode === 'work') updateBreakDisplay();
-        else updateWorkDisplay();
+        if (state.currentMode === 'work') updateTimeDisplay(el.timeDisplayBreak, state.breakRemainingSeconds);
+        else updateTimeDisplay(el.timeDisplayWork, state.workRemainingSeconds);
       });
     });
     setTimeout(() => {
-      if (state.currentMode === 'work') updateWorkDisplay();
-      else updateBreakDisplay();
+      if (state.currentMode === 'work') updateTimeDisplay(el.timeDisplayWork, state.workRemainingSeconds);
+      else updateTimeDisplay(el.timeDisplayBreak, state.breakRemainingSeconds);
     }, COUNTER_TRANSITION_MS);
   } else {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        updateWorkDisplay();
-        updateBreakDisplay();
+        updateTimeDisplay(el.timeDisplayWork, state.workRemainingSeconds);
+        updateTimeDisplay(el.timeDisplayBreak, state.breakRemainingSeconds);
       });
     });
   }
 }
 
+function render() {
+  renderTimerUI();
+  renderDayLog();
+  updateTimeDisplays();
+}
+
+// --- Effects ---
 function triggerGlowPulse(remaining) {
   if (!el.glowPulses) return;
   const glowEls = el.glowPulses.querySelectorAll('.glow');
@@ -597,6 +593,7 @@ function triggerTransitionGlow() {
   }
 }
 
+// --- Timer logic ---
 function tick() {
   const remaining = getTimeRemaining();
   if (remaining <= 0) return;
@@ -604,7 +601,7 @@ function tick() {
   const nowRemaining = getTimeRemaining();
   if (nowRemaining >= 1 && nowRemaining <= 4) {
     triggerGlowPulse(nowRemaining);
-    playBeep({ frequency: 1046, duration: 0.12 });
+    if (!state.muted) playBeep({ frequency: 1046, duration: 0.12 });
   }
   if (nowRemaining <= 0) {
     if (state.currentMode === 'work') {
@@ -618,12 +615,16 @@ function tick() {
       }
     }
     triggerTransitionGlow();
-    playDingDong();
+    if (!state.muted) playDingDong();
     setTimeRemaining(getDuration(state.currentMode));
     state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
   }
   saveState();
-  render();
+  if (nowRemaining <= 0) {
+    render();
+  } else {
+    renderTimeAndProgressOnly();
+  }
 }
 
 function setCurrentMode(mode) {
@@ -662,16 +663,15 @@ function stop() {
 function start() {
   if (state.isRunning) return;
   ensureDayStarted();
-  getAudioContext();
-  if (audioContext.state === 'suspended') {
-    audioContext.resume();
-  }
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume();
   state.isRunning = true;
   state.intervalId = setInterval(tick, 1000);
   saveState();
   render();
 }
 
+// --- Actions ---
 function handlePlayPause() {
   if (state.isRunning) stop();
   else start();
@@ -723,6 +723,7 @@ function clearLog() {
   state.completedCycles = [];
   saveState();
   render();
+  if (el.dayLog) el.dayLog.focus();
 }
 
 /** Remove a single log entry by its index in the sorted list. Does not affect timer state. */
@@ -748,6 +749,37 @@ function applyPreset(workMinutes, breakMinutes) {
   render();
 }
 
+// --- Init ---
+function resyncTimerFromElapsed() {
+  if (!state.isRunning || state.intervalId == null || state.lastSavedAt == null) return;
+  const elapsed = Math.floor((Date.now() - state.lastSavedAt) / 1000);
+  if (elapsed <= 0) return;
+  const remaining = getTimeRemaining();
+  const newRemaining = Math.max(0, remaining - elapsed);
+  setTimeRemaining(newRemaining);
+  state.lastSavedAt = Date.now();
+  if (newRemaining <= 0) {
+    if (state.currentMode === 'work') {
+      state.workSegmentCompletedByTimer = true;
+    } else if (state.currentMode === 'break') {
+      if (state.pendingSkippedWork) {
+        recordPendingSkippedWork(state.breakDuration);
+      } else if (state.workSegmentCompletedByTimer) {
+        recordCompletedCycle();
+        state.workSegmentCompletedByTimer = false;
+      }
+    }
+    triggerTransitionGlow();
+    if (!state.muted) playDingDong();
+    setTimeRemaining(getDuration(state.currentMode));
+    state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
+  }
+  saveState();
+  render();
+  clearInterval(state.intervalId);
+  state.intervalId = setInterval(tick, 1000);
+}
+
 function init() {
   loadState();
   if (state.isRunning) {
@@ -755,6 +787,11 @@ function init() {
   }
   render();
 
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') resyncTimerFromElapsed();
+  });
+
+  // Glow pulse animation cleanup
   if (el.glowPulses) {
     el.glowPulses.querySelectorAll('.glow').forEach((g) => {
       g.addEventListener('animationend', () => {
@@ -762,8 +799,10 @@ function init() {
       });
     });
   }
-  el.pauseBtn.addEventListener('click', handlePlayPause);
+  // Pause / mute
+  if (el.pauseBtn) el.pauseBtn.addEventListener('click', handlePlayPause);
   if (el.muteBtn) el.muteBtn.addEventListener('click', toggleMute);
+  // Day log: clear, view-all, hide, remove-entry
   if (el.dayLogClear) el.dayLogClear.addEventListener('click', clearLog);
   if (el.dayLogCycles) {
     el.dayLogCycles.addEventListener('click', (e) => {
@@ -778,20 +817,20 @@ function init() {
       }
       li.classList.add('day-log__cycle--removing');
       li.addEventListener('transitionend', () => {
-        if (!logExpanded) collapsedVisibleCount = Math.max(0, collapsedVisibleCount - 1);
+        if (!logViewState.expanded) logViewState.collapsedVisibleCount = Math.max(0, logViewState.collapsedVisibleCount - 1);
         removeLogEntry(index);
-        if (!logExpanded && collapsedVisibleCount === 0 && state.completedCycles.length >= 1) {
-          if (revealRemainingTimeoutId != null) clearTimeout(revealRemainingTimeoutId);
-          revealRemainingTimeoutId = setTimeout(() => {
-            revealRemainingTimeoutId = null;
-            if (!el.dayLogViewAll || state.completedCycles.length === 0 || logExpanded) return;
+        if (!logViewState.expanded && logViewState.collapsedVisibleCount === 0 && state.completedCycles.length >= 1) {
+          if (logViewState.revealRemainingTimeoutId != null) clearTimeout(logViewState.revealRemainingTimeoutId);
+          logViewState.revealRemainingTimeoutId = setTimeout(() => {
+            logViewState.revealRemainingTimeoutId = null;
+            if (!el.dayLogViewAll || state.completedCycles.length === 0 || logViewState.expanded) return;
             el.dayLogViewAll.classList.add('day-log__view-all--fade-out');
             setTimeout(() => {
               el.dayLogViewAll.hidden = true;
               el.dayLogViewAll.classList.remove('day-log__view-all--fade-out');
               requestAnimationFrame(() => {
-                collapsedVisibleCount = Math.min(3, state.completedCycles.length);
-                justRevealedRemainingEntries = true;
+                logViewState.collapsedVisibleCount = Math.min(VISIBLE_LOG_ENTRIES_DEFAULT, state.completedCycles.length);
+                logViewState.justRevealedRemainingEntries = true;
                 render();
               });
             }, 300);
@@ -802,72 +841,108 @@ function init() {
   }
   if (el.dayLogViewAll) {
     el.dayLogViewAll.addEventListener('click', () => {
-      if (revealRemainingTimeoutId != null) {
-        clearTimeout(revealRemainingTimeoutId);
-        revealRemainingTimeoutId = null;
+      if (logViewState.revealRemainingTimeoutId != null) {
+        clearTimeout(logViewState.revealRemainingTimeoutId);
+        logViewState.revealRemainingTimeoutId = null;
       }
-      logExpanded = true;
+      logViewState.expanded = true;
       render();
     });
   }
   if (el.dayLogHide) {
     el.dayLogHide.addEventListener('click', () => {
-      if (revealRemainingTimeoutId != null) {
-        clearTimeout(revealRemainingTimeoutId);
-        revealRemainingTimeoutId = null;
+      if (logViewState.revealRemainingTimeoutId != null) {
+        clearTimeout(logViewState.revealRemainingTimeoutId);
+        logViewState.revealRemainingTimeoutId = null;
       }
-      logExpanded = false;
+      logViewState.expanded = false;
       const totalEntries = state.completedCycles.length;
-      collapsedVisibleCount = Math.min(3, totalEntries);
+      logViewState.collapsedVisibleCount = Math.min(VISIBLE_LOG_ENTRIES_DEFAULT, totalEntries);
       render();
+      if (el.dayLogViewAll && !el.dayLogViewAll.hidden) el.dayLogViewAll.focus();
+      else if (el.dayLog) el.dayLog.focus();
     });
   }
-  el.timer.addEventListener('click', (e) => {
-    const restartBtn = e.target.closest('.timer__btn--restart');
-    if (restartBtn) {
-      const mode = restartBtn.getAttribute('data-mode');
-      restart(mode === 'break' ? 'break' : 'work');
-      return;
-    }
-    if (e.target.closest('.timer__btn--skip')) skip();
-  });
-  el.presets.addEventListener('click', (e) => {
-    const btn = e.target.closest('.timer__btn--new-pomodoro');
-    if (!btn) return;
-    const work = parseInt(btn.dataset.work, 10);
-    const breakMin = parseInt(btn.dataset.break, 10);
-    if (!Number.isNaN(work) && !Number.isNaN(breakMin)) applyPreset(work, breakMin);
-  });
+  // Timer: restart, skip
+  if (el.timer) {
+    el.timer.addEventListener('click', (e) => {
+      const restartBtn = e.target.closest('.timer__btn--restart');
+      if (restartBtn) {
+        const mode = restartBtn.getAttribute('data-mode');
+        restart(mode === 'break' ? 'break' : 'work');
+        return;
+      }
+      if (e.target.closest('.timer__btn--skip')) skip();
+    });
+  }
+  // Presets (25/5, 50/10)
+  if (el.presets) {
+    el.presets.addEventListener('click', (e) => {
+      const btn = e.target.closest('.timer__btn--new-pomodoro');
+      if (!btn) return;
+      const work = parseInt(btn.dataset.work, 10);
+      const breakMin = parseInt(btn.dataset.break, 10);
+      if (!Number.isNaN(work) && !Number.isNaN(breakMin)) applyPreset(work, breakMin);
+    });
+  }
 
-  el.timeDisplayWork.addEventListener('blur', () => {
-    const sec = parseTimeInput(el.timeDisplayWork.value);
-    if (sec !== null) {
-      state.workRemainingSeconds = sec;
-      state.workDuration = sec;
-    } else {
-      el.timeDisplayWork.value = formatTime(state.workRemainingSeconds);
+  // Time inputs (work / break)
+  const TIME_INPUT_ERROR_MSG = 'Invalid time. Use format like 25:00 or 25 minutes.';
+  function clearTimeInputError() {
+    if (el.timeInputError) el.timeInputError.textContent = '';
+    if (el.timeDisplayWork) {
+      el.timeDisplayWork.removeAttribute('aria-invalid');
+      el.timeDisplayWork.removeAttribute('aria-describedby');
     }
-    saveState();
-    render();
-  });
-  el.timeDisplayWork.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') el.timeDisplayWork.blur();
-  });
-
-  el.timeDisplayBreak.addEventListener('blur', () => {
-    const sec = parseTimeInput(el.timeDisplayBreak.value);
-    if (sec !== null) {
-      state.breakRemainingSeconds = sec;
-      state.breakDuration = sec;
-    } else {
-      el.timeDisplayBreak.value = formatTime(state.breakRemainingSeconds);
+    if (el.timeDisplayBreak) {
+      el.timeDisplayBreak.removeAttribute('aria-invalid');
+      el.timeDisplayBreak.removeAttribute('aria-describedby');
     }
-    saveState();
-    render();
-  });
-  el.timeDisplayBreak.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') el.timeDisplayBreak.blur();
-  });
+  }
+  function setTimeInputError(input) {
+    if (!el.timeInputError) return;
+    input.setAttribute('aria-invalid', 'true');
+    input.setAttribute('aria-describedby', 'time-input-error');
+    el.timeInputError.textContent = TIME_INPUT_ERROR_MSG;
+  }
+  if (el.timeDisplayWork) {
+    el.timeDisplayWork.addEventListener('focus', clearTimeInputError);
+    el.timeDisplayWork.addEventListener('blur', () => {
+      const sec = parseTimeInput(el.timeDisplayWork.value);
+      if (sec !== null) {
+        clearTimeInputError();
+        state.workRemainingSeconds = sec;
+        state.workDuration = sec;
+      } else {
+        el.timeDisplayWork.value = formatTime(state.workRemainingSeconds);
+        setTimeInputError(el.timeDisplayWork);
+      }
+      saveState();
+      render();
+    });
+    el.timeDisplayWork.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') el.timeDisplayWork.blur();
+    });
+  }
+  if (el.timeDisplayBreak) {
+    el.timeDisplayBreak.addEventListener('focus', clearTimeInputError);
+    el.timeDisplayBreak.addEventListener('blur', () => {
+      const sec = parseTimeInput(el.timeDisplayBreak.value);
+      if (sec !== null) {
+        clearTimeInputError();
+        state.breakRemainingSeconds = sec;
+        state.breakDuration = sec;
+      } else {
+        el.timeDisplayBreak.value = formatTime(state.breakRemainingSeconds);
+        setTimeInputError(el.timeDisplayBreak);
+      }
+      saveState();
+      render();
+    });
+    el.timeDisplayBreak.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') el.timeDisplayBreak.blur();
+    });
+  }
 }
 
 init();
