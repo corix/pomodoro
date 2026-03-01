@@ -4,8 +4,8 @@ Minimal web app for the [Pomodoro Technique](https://en.wikipedia.org/wiki/Pomod
 
 ## Features
 
-- **Work and break mode** – Separate timers for each phase
-— **Controls** – Start/pause, restart, and skip to the next phase
+- **Work and break mode** – Separate timers for each phase 
+- **Controls** – Start/pause, restart, and skip to the next phase
 - **Presets** – Choose a standard 30-minute or 1-hour sprint
 - **Customizable durations** — Edit times directly (supports `M:SS`, `5m`, `30s`, `4m30s`, etc.)
 - **Progress indicator** – Visual bar showing elapsed time and graphic pulse as timer approaches zero
