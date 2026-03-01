@@ -282,17 +282,42 @@ body {
   gap: var(--space-xs);
   padding: var(--space-md);
   padding-top: calc(4px + var(--space-md));
-  background: var(--color-bg-muted);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-bg-muted) 95%, white) 0%,
+    var(--color-bg-muted) 45%,
+    color-mix(in srgb, var(--color-bg-muted) 98%, black) 100%
+  );
   border-radius: var(--radius-2xl);
   transition: background 0.4s ease, padding 0.4s ease, opacity 0.4s ease;
   position: relative;
   overflow: hidden;
 }
 
+/* Frosted glass noise overlay */
+.timer__segment::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' result='noise'/%3E%3CfeColorMatrix in='noise' type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' fill='white' fill-opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  opacity: 0.04;
+}
+
 /* Inactive segment: darker and smaller */
 .timer__segment:not(.timer__segment--active) {
-  background: var(--color-bg);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-bg) 97%, white) 0%,
+    var(--color-bg) 50%,
+    color-mix(in srgb, var(--color-bg) 98%, black) 100%
+  );
   opacity: 0.7;
+}
+.timer__segment:not(.timer__segment--active)::before {
+  opacity: 0.03;
 }
 .timer__segment:not(.timer__segment--active) .timer__time,
 .timer__segment:not(.timer__segment--active) .timer__time--input {
@@ -306,6 +331,10 @@ body {
   opacity: 0.8;
 }
 
+.timer__segment > * {
+  position: relative;
+  z-index: 1;
+}
 .timer__segment .timer__time,
 .timer__segment .timer__time--input {
   font-size: var(--text-xl);
@@ -368,7 +397,15 @@ body {
 .timer__segment--active {
   padding: var(--space-lg);
   padding-top: calc(4px + var(--space-lg));
-  background: var(--color-bg-elevated);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-bg-elevated) 92%, white) 0%,
+    var(--color-bg-elevated) 40%,
+    color-mix(in srgb, var(--color-bg-elevated) 96%, black) 100%
+  );
+}
+.timer__segment--active::before {
+  opacity: 0.055;
 }
 
 .timer__segment--active .timer__time,
@@ -380,13 +417,6 @@ body {
   font-size: var(--text-sm);
 }
 
-.timer__segment--work.timer__segment--active {
-  border-color: var(--color-mode-work);
-}
-
-.timer__segment--break.timer__segment--active {
-  border-color: var(--color-mode-break);
-}
 
 .timer__segment--work .timer__segment-label {
   color: var(--color-mode-work);
