@@ -21,13 +21,16 @@
             <svg class="timer__icon timer__icon--muted" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/><path d="M2 2l20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
         </button>
         <main class="timer" role="timer" aria-live="polite">
-            <!-- Preset buttons: work:break (minutes) -->
-            <div class="timer__presets" id="presets">
-                <button type="button" class="timer__btn timer__btn--new-pomodoro" data-work="25" data-break="5" aria-label="New pomodoro: 25 min work, 5 min break">25:5</button>
-                <button type="button" class="timer__btn timer__btn--new-pomodoro" data-work="45" data-break="15" aria-label="New pomodoro: 45 min work, 15 min break">45:15</button>
+            <div class="timer__status-row">
+                <div class="timer__status-row-inner">
+                    <p class="timer__status" id="timer-status" aria-live="polite">Pomodoro is paused</p>
+                    <div class="timer__presets" id="presets">
+                    <button type="button" class="timer__btn timer__btn--new-pomodoro" data-work="25" data-break="5" aria-label="New pomodoro: 25 min work, 5 min break">25:5</button>
+                    <button type="button" class="timer__btn timer__btn--new-pomodoro" data-work="45" data-break="15" aria-label="New pomodoro: 45 min work, 15 min break">45:15</button>
+                    </div>
+                </div>
+                <div class="timer__status-row-spacer" aria-hidden="true"></div>
             </div>
-            <!-- Running / paused status -->
-            <p class="timer__status" id="timer-status" aria-live="polite">Pomodoro is paused</p>
             <!-- Timers (left) + Start/Stop (right) -->
             <div class="timer__layout">
                 <div class="timer__segments">
