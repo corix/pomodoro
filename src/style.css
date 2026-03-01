@@ -41,6 +41,8 @@
   /* Transition (timer hit zero) – neutral, bright */
   --color-transition: #fafafa;
   --color-transition-bg: rgba(250, 250, 250, 0.25);
+  /* Soft neutral for lingering pulses at zero – muted so transition isn’t bright */
+  --color-transition-dim: #a0a0a0;
 
   /* ─── Spacing (xs → xl) ─── */
   --space-xs: 0.25rem;   /* 4px */
@@ -98,51 +100,111 @@ body {
 }
 
 /* Background glow – pulses in time with countdown sounds */
+.glow-pulses {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.glow-pulses .glow,
 .glow {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   opacity: 0;
+}
+.glow-pulses .glow {
   background: radial-gradient(
-    ellipse 150% 110% at 50% 50%,
+    ellipse 220% 160% at 50% 50%,
     var(--glow-color, var(--color-mode-work)) 0%,
-    transparent 62%
+    transparent 72%
   );
   transition: opacity 0.5s ease-out;
 }
-.glow.glow--pulse {
-  animation: glow-pulse 2s ease-out forwards;
+.glow-pulses .glow.glow--pulse {
+  animation: glow-pulse 8s ease-out forwards;
 }
+/* First pulse (5s) lowest opacity, last (1s) capped – gentler build-up */
+.glow-pulses .glow.glow--pulse[data-pulse-level="5"] { --glow-opacity-scale: 0.28; }
+.glow-pulses .glow.glow--pulse[data-pulse-level="4"] { --glow-opacity-scale: 0.45; }
+.glow-pulses .glow.glow--pulse[data-pulse-level="3"] { --glow-opacity-scale: 0.62; }
+.glow-pulses .glow.glow--pulse[data-pulse-level="2"] { --glow-opacity-scale: 0.78; }
+.glow-pulses .glow.glow--pulse[data-pulse-level="1"] { --glow-opacity-scale: 0.9; }
 @keyframes glow-pulse {
   0% { opacity: 0; transform: scale(0.96); }
-  12% { opacity: 0.1; transform: scale(1.04); }
-  22% { opacity: 0.05; transform: scale(1.02); }
-  40% { opacity: 0.035; transform: scale(1.01); }
-  58% { opacity: 0.02; transform: scale(1.005); }
-  76% { opacity: 0.01; transform: scale(1); }
+  4% { opacity: calc(0.052 * var(--glow-opacity-scale, 1)); transform: scale(1.04); }
+  12% { opacity: calc(0.04 * var(--glow-opacity-scale, 1)); transform: scale(1.02); }
+  22% { opacity: calc(0.03 * var(--glow-opacity-scale, 1)); transform: scale(1.01); }
+  35% { opacity: calc(0.022 * var(--glow-opacity-scale, 1)); transform: scale(1.005); }
+  50% { opacity: calc(0.014 * var(--glow-opacity-scale, 1)); transform: scale(1.002); }
+  65% { opacity: calc(0.009 * var(--glow-opacity-scale, 1)); transform: scale(1); }
+  78% { opacity: calc(0.005 * var(--glow-opacity-scale, 1)); transform: scale(1); }
+  90% { opacity: calc(0.002 * var(--glow-opacity-scale, 1)); transform: scale(1); }
   100% { opacity: 0; transform: scale(1); }
 }
 
-/* Neutral glow on timer transition (hit zero) */
-.glow--transition {
-  background: radial-gradient(
-    ellipse 150% 110% at 50% 50%,
-    var(--color-transition) 0%,
-    transparent 60%
-  );
+/* Radar-style ripple rings (countdown 5–1) – same scale at all viewport sizes */
+.ripples {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
 }
-.glow--transition.glow--transition-active {
-  animation: glow-transition 5s ease-out forwards;
+.ripple-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5vmin;
+  height: 5vmin;
+  transform: translate(-50%, -50%) scale(14);
+  color: color-mix(in srgb, var(--ripple-color, var(--color-mode-work)) 6%, transparent);
+  opacity: 0;
+  animation: ripple-expand 2s linear forwards;
 }
-@keyframes glow-transition {
-  0% { opacity: 0; transform: scale(0.97); }
-  6% { opacity: 0.22; transform: scale(1.03); }
-  25% { opacity: 0.1; transform: scale(1.01); }
-  45% { opacity: 0.06; transform: scale(1.005); }
-  65% { opacity: 0.03; transform: scale(1.002); }
-  82% { opacity: 0.012; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1); }
+@keyframes ripple-expand {
+  0% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(14);
+  }
+  35% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(18);
+  }
+  65% {
+    opacity: 0.1;
+    transform: translate(-50%, -50%) scale(21);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(26);
+  }
+}
+
+.ripple-ring--zero {
+  animation: ripple-expand-zero 1s linear forwards;
+}
+@keyframes ripple-expand-zero {
+  0% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(14);
+  }
+  32% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(20);
+  }
+  65% {
+    opacity: 0.1;
+    transform: translate(-50%, -50%) scale(26);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(32);
+  }
 }
 
 #app {

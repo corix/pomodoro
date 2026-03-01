@@ -79,8 +79,8 @@ const el = {
   progressWork: document.getElementById('progress-work'),
   progressBreak: document.getElementById('progress-break'),
   muteBtn: document.getElementById('mute-btn'),
-  glow: document.getElementById('glow'),
-  glowTransition: document.getElementById('glow-transition'),
+  glowPulses: document.getElementById('glow-pulses'),
+  ripples: document.getElementById('ripples'),
 };
 
 let state = {
@@ -94,7 +94,7 @@ let state = {
   muted: false,
 };
 
-let glowPulseTimeoutId = null;
+let glowPulseIndex = 0;
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -234,29 +234,63 @@ function render() {
   el.progressBreak.style.setProperty('--progress', String(breakProgress));
 }
 
-function triggerGlowPulse() {
-  if (!el.glow) return;
-  if (glowPulseTimeoutId !== null) {
-    clearTimeout(glowPulseTimeoutId);
-    glowPulseTimeoutId = null;
-  }
+function triggerGlowPulse(remaining) {
+  if (!el.glowPulses) return;
+  const glowEls = el.glowPulses.querySelectorAll('.glow');
+  if (glowEls.length === 0) return;
   const color = state.currentMode === 'work' ? 'var(--color-mode-work)' : 'var(--color-mode-break)';
-  el.glow.style.setProperty('--glow-color', color);
-  el.glow.classList.remove('glow--pulse');
-  el.glow.offsetHeight; // reflow so animation can restart
-  el.glow.classList.add('glow--pulse');
-  glowPulseTimeoutId = setTimeout(() => {
-    el.glow.classList.remove('glow--pulse');
-    glowPulseTimeoutId = null;
-  }, 2000);
+  const target = glowEls[glowPulseIndex];
+  target.style.setProperty('--glow-color', color);
+  target.setAttribute('data-pulse-level', String(remaining));
+  target.classList.add('glow--pulse');
+  glowPulseIndex = (glowPulseIndex + 1) % glowEls.length;
+
+  if (el.ripples) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const ring = document.createElementNS(ns, 'svg');
+    ring.setAttribute('class', 'ripple-ring');
+    ring.setAttribute('viewBox', '0 0 100 100');
+    ring.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    ring.style.setProperty('--ripple-color', color);
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', '50');
+    circle.setAttribute('cy', '50');
+    circle.setAttribute('r', '49');
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', 'currentColor');
+    circle.setAttribute('stroke-width', '0.25');
+    circle.setAttribute('vector-effect', 'non-scaling-stroke');
+    ring.appendChild(circle);
+    ring.addEventListener('animationend', () => ring.remove());
+    el.ripples.appendChild(ring);
+  }
 }
 
 function triggerTransitionGlow() {
-  if (!el.glowTransition) return;
-  el.glowTransition.classList.remove('glow--transition-active');
-  el.glowTransition.offsetHeight; // reflow so animation can restart
-  el.glowTransition.classList.add('glow--transition-active');
-  setTimeout(() => el.glowTransition.classList.remove('glow--transition-active'), 5000);
+  if (el.glowPulses) {
+    el.glowPulses.querySelectorAll('.glow.glow--pulse').forEach((g) => {
+      g.style.setProperty('--glow-color', 'var(--color-transition-dim)');
+    });
+  }
+  if (el.ripples) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const ring = document.createElementNS(ns, 'svg');
+    ring.setAttribute('class', 'ripple-ring ripple-ring--zero');
+    ring.setAttribute('viewBox', '0 0 100 100');
+    ring.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    ring.style.setProperty('--ripple-color', 'var(--color-transition-dim)');
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', '50');
+    circle.setAttribute('cy', '50');
+    circle.setAttribute('r', '49');
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', 'currentColor');
+    circle.setAttribute('stroke-width', '0.25');
+    circle.setAttribute('vector-effect', 'non-scaling-stroke');
+    ring.appendChild(circle);
+    ring.addEventListener('animationend', () => ring.remove());
+    el.ripples.appendChild(ring);
+  }
 }
 
 function tick() {
@@ -267,7 +301,7 @@ function tick() {
   if (nowRemaining >= 1 && nowRemaining <= 5) {
     const pentatonic = [784, 659, 587, 523, 440];
     playBeep({ frequency: pentatonic[5 - nowRemaining], duration: 0.5 });
-    triggerGlowPulse();
+    triggerGlowPulse(nowRemaining);
   }
   if (nowRemaining <= 0) {
     triggerTransitionGlow();
@@ -358,6 +392,13 @@ function init() {
   }
   render();
 
+  if (el.glowPulses) {
+    el.glowPulses.querySelectorAll('.glow').forEach((g) => {
+      g.addEventListener('animationend', () => {
+        g.classList.remove('glow--pulse');
+      });
+    });
+  }
   el.pauseBtn.addEventListener('click', handlePlayPause);
   if (el.muteBtn) el.muteBtn.addEventListener('click', toggleMute);
   el.timer.addEventListener('click', (e) => {
