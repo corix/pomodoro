@@ -242,7 +242,7 @@ body {
 
 .timer-viewport > .day-log {
   flex-shrink: 0;
-  padding-left: 1.5rem; /* room for delete (x) button so it isn’t clipped */
+  padding-left: 0; /* room for delete (x) button so it isn’t clipped */
 }
 
 
