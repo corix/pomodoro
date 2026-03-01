@@ -118,6 +118,9 @@ let glowPulseIndex = 0;
 /** Cache key for the log list so we don't re-render it every tick (avoids x flicker). */
 let lastRenderedLogKey = '';
 
+/** Previous mode so we can delay updating the newly active counter until after its scale-up transition. */
+let lastCurrentMode = null;
+
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -313,13 +316,6 @@ function loadState() {
 }
 
 function render() {
-  if (document.activeElement !== el.timeDisplayWork) {
-    el.timeDisplayWork.value = formatTime(state.workRemainingSeconds);
-  }
-  if (document.activeElement !== el.timeDisplayBreak) {
-    el.timeDisplayBreak.value = formatTime(state.breakRemainingSeconds);
-  }
-
   const workElapsed = state.workDuration - state.workRemainingSeconds;
   const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
   const hideWorkControls = state.currentMode === 'work' && !state.isRunning && workElapsed < 1;
@@ -421,6 +417,44 @@ function render() {
         el.dayLogViewAll.hidden = true;
       }
     }
+  }
+
+  // Defer time display updates to next frame so segment --active transition isn’t glitched by input reflow
+  // Double rAF so counter font-size/width transition runs when segment becomes active (value update after paint)
+  const modeJustChanged = lastCurrentMode != null && lastCurrentMode !== state.currentMode;
+  lastCurrentMode = state.currentMode;
+
+  const COUNTER_TRANSITION_MS = 520;
+
+  function updateWorkDisplay() {
+    if (document.activeElement !== el.timeDisplayWork) {
+      el.timeDisplayWork.value = formatTime(state.workRemainingSeconds);
+    }
+  }
+  function updateBreakDisplay() {
+    if (document.activeElement !== el.timeDisplayBreak) {
+      el.timeDisplayBreak.value = formatTime(state.breakRemainingSeconds);
+    }
+  }
+
+  if (modeJustChanged) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (state.currentMode === 'work') updateBreakDisplay();
+        else updateWorkDisplay();
+      });
+    });
+    setTimeout(() => {
+      if (state.currentMode === 'work') updateWorkDisplay();
+      else updateBreakDisplay();
+    }, COUNTER_TRANSITION_MS);
+  } else {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        updateWorkDisplay();
+        updateBreakDisplay();
+      });
+    });
   }
 }
 

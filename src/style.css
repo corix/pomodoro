@@ -282,7 +282,8 @@ body {
   display: flex;
   flex-direction: row;
   gap: var(--space-xl);
-  align-items: center;
+  align-items: stretch;
+  height: 18rem; /* Fixed height so container never changes */
 }
 
 .timer__segments {
@@ -291,6 +292,7 @@ body {
   gap: var(--space-md);
   flex: 1;
   min-width: 0;
+  height: 18rem;
 }
 
 .timer__controls-main {
@@ -306,9 +308,14 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start; /* Keep content at top so label doesn't jump when segment grows */
   gap: var(--space-xs);
   padding: var(--space-md);
   padding-top: calc(4px + var(--space-md));
+  flex: 1 1 0;
+  min-height: 0; /* Allow flex shrink so both segments fit in fixed height */
+  width: 100%; /* Both work and break segments same width */
+  box-sizing: border-box;
   background: linear-gradient(
     165deg,
     color-mix(in srgb, var(--color-bg-muted) 95%, white) 0%,
@@ -317,9 +324,9 @@ body {
   );
   border-radius: var(--radius-2xl);
   transition:
+    flex 0.5s cubic-bezier(0.4, 0, 0.2, 1),
     padding 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
 }
@@ -365,8 +372,10 @@ body {
   z-index: 1;
 }
 
-/* Inactive segment: darker and smaller; subtle scale so transition feels smoother */
+/* Inactive segment: darker; no scale so width stays the same during transition */
 .timer__segment:not(.timer__segment--active) {
+  flex: 0.75 1 0; /* Inactive: slightly less vertical space */
+  padding-bottom: var(--space-lg); /* Extra padding under the counter */
   background: linear-gradient(
     165deg,
     color-mix(in srgb, var(--color-bg) 97%, white) 0%,
@@ -374,17 +383,21 @@ body {
     color-mix(in srgb, var(--color-bg) 98%, black) 100%
   );
   opacity: 0.72;
-  transform: scale(0.98);
 }
 .timer__segment--active {
-  transform: scale(1);
+  flex: 1.25 1 0; /* Active: slightly more vertical space */
 }
+
+/* Work is first (top): scale from top so the counter doesn’t jump when becoming active */
 .timer__segment:not(.timer__segment--active)::before {
   opacity: 0.03;
 }
 .timer__segment:not(.timer__segment--active) .timer__time,
 .timer__segment:not(.timer__segment--active) .timer__time--input {
   color: var(--color-text-subtle);
+}
+.timer__segment:not(.timer__segment--active) .timer__time--input {
+  width: 4.0625rem; /* 3.25em at 1.25rem font – fixed so transition does not dip when becoming active */
 }
 .timer__segment:not(.timer__segment--active) .timer__segment-label {
   color: var(--color-text-subtle);
@@ -417,13 +430,18 @@ body {
   display: none;
 }
 
-/* When segment is active but controls should stay hidden (no time elapsed, paused) */
+/* When segment is active but controls should stay hidden (no time elapsed, paused).
+   Use visibility + opacity (not display:none) so the row keeps height and the work
+   timer animates smoothly like the break. */
 .timer__segment--controls-hidden .timer__btn--restart,
 .timer__segment--controls-hidden .timer__btn--skip {
-  display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
   visibility: hidden !important;
+}
+.timer__segment--controls-hidden .timer__btn--restart[hidden],
+.timer__segment--controls-hidden .timer__btn--skip[hidden] {
+  display: inline-flex !important; /* Override [hidden] so layout space is reserved */
 }
 
 /* Break: hide restart button until time has elapsed (e.g. after restart); keep space so layout doesn't shift */
@@ -518,6 +536,15 @@ body {
 .timer__segment--active .timer__time,
 .timer__segment--active .timer__time--input {
   font-size: var(--text-timer-sm);
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.5s cubic-bezier(0.4, 0, 0.2, 1), width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-behavior: allow-discrete;
+}
+
+@starting-style {
+  .timer__segment--active .timer__time--input {
+    font-size: var(--text-xl);
+    width: 4.0625rem;
+  }
 }
 
 .timer__segment--active .timer__segment-label {
@@ -570,7 +597,7 @@ body {
 }
 
 .timer__segment--active .timer__time--input {
-  width: 4.5em;
+  width: 11.25rem; /* 4.5em at 2.5rem font – fixed so width doesn’t glitch during font-size transition */
 }
 
 .timer__time--input {
@@ -582,6 +609,8 @@ body {
   border: none;
   border-radius: var(--radius-sm);
   font: inherit;
+  backface-visibility: hidden;
+  transform: translateZ(0); /* Own layer to reduce paint glitch when segment becomes active */
 }
 
 .timer__time--input:focus {
