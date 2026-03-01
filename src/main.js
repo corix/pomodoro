@@ -376,6 +376,7 @@ function render() {
   }
 
   if (el.dayLogCycles) {
+    const wasLogExpanded = lastRenderedLogExpanded;
     const totalEntries = state.completedCycles.length;
     if (el.dayLogSummary) {
       if (totalEntries === 0) {
@@ -420,9 +421,15 @@ function render() {
       lastRenderedLogExpanded = logExpanded;
       lastRenderedVisibleCount = visibleCount;
       const isNewEntry = sorted.length > prevCount;
+      const animateNewEntry = isNewEntry && (prevCount < 3 || logExpanded || visibleCount !== 3);
+      const useFadeInForNew = isNewEntry && !animateNewEntry && (!logExpanded || totalEntries <= 3);
+      const isFirstEntryReplacingSummary = isNewEntry && prevCount === 0;
       el.dayLogCycles.innerHTML = visibleEntries
       .map((entry, i) => {
-        const cycleClass = i === 0 && isNewEntry ? 'day-log__cycle day-log__cycle--new' : 'day-log__cycle';
+        let cycleClass = 'day-log__cycle';
+        if (i === 0 && isFirstEntryReplacingSummary) cycleClass += ' day-log__cycle--push-up';
+        else if (i === 0 && animateNewEntry) cycleClass += ' day-log__cycle--new';
+        else if (i === 0 && useFadeInForNew) cycleClass += ' day-log__cycle--fade-in';
         const timePart = `<span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}`;
         const removeBtn = `<button type="button" class="day-log__remove" data-sorted-index="${i}" aria-label="Remove entry"><svg class="day-log__remove-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
         if (entry.type === 'skipped_work') {
@@ -450,9 +457,15 @@ function render() {
           li.classList.add('day-log__cycle--fade-in');
           li.addEventListener('animationend', () => li.classList.remove('day-log__cycle--fade-in'), { once: true });
         });
-      } else if (isNewEntry && el.dayLogCycles.firstElementChild) {
+      } else if (isFirstEntryReplacingSummary && el.dayLogCycles.firstElementChild) {
+        const firstLi = el.dayLogCycles.firstElementChild;
+        firstLi.addEventListener('animationend', () => firstLi.classList.remove('day-log__cycle--push-up'), { once: true });
+      } else if (animateNewEntry && el.dayLogCycles.firstElementChild) {
         const firstLi = el.dayLogCycles.firstElementChild;
         firstLi.addEventListener('animationend', () => firstLi.classList.remove('day-log__cycle--new'), { once: true });
+      } else if (useFadeInForNew && el.dayLogCycles.firstElementChild) {
+        const firstLi = el.dayLogCycles.firstElementChild;
+        firstLi.addEventListener('animationend', () => firstLi.classList.remove('day-log__cycle--fade-in'), { once: true });
       }
     }
     const showShowAll = !logExpanded && totalEntries > visibleCount;
@@ -463,8 +476,17 @@ function render() {
         const hiddenCount = totalEntries - visibleCount;
         el.dayLogViewAll.innerHTML = `${chevronDown} more (${hiddenCount})`;
         el.dayLogViewAll.setAttribute('aria-label', `Show ${hiddenCount} more log entries`);
+        const wasHidden = el.dayLogViewAll.hidden;
+        el.dayLogViewAll.hidden = false;
+        if (wasHidden && !wasLogExpanded) {
+          el.dayLogViewAll.classList.add('day-log__view-all--fade-in');
+          el.dayLogViewAll.addEventListener('animationend', () => {
+            el.dayLogViewAll.classList.remove('day-log__view-all--fade-in');
+          }, { once: true });
+        }
+      } else {
+        el.dayLogViewAll.hidden = true;
       }
-      el.dayLogViewAll.hidden = !showShowAll;
     }
     if (el.dayLogHide) {
       el.dayLogHide.hidden = !showHide;
