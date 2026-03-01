@@ -847,8 +847,8 @@ body {
 }
 
 .day-log__cycles {
-  margin: 0 0 0 -1rem;
-  padding-left: 1rem;
+  margin: 0 0 0 -0.75rem;
+  padding-left: 0.75rem;
   list-style: none;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
@@ -857,13 +857,26 @@ body {
 
 .day-log__cycle {
   position: relative;
-  margin-left: -1rem;
-  padding-left: 1rem;
+  margin-left: -0.75rem;
+  padding-left: 0.75rem;
   padding-top: var(--space-xs);
   padding-bottom: var(--space-xs);
 }
 
+/* Invisible strip in gutter so hovering where the x is still triggers row hover */
+.day-log__cycle::before {
+  content: '';
+  position: absolute;
+  left: -0.75rem;
+  top: 0;
+  bottom: 0;
+  width: 2rem;
+  z-index: 0;
+}
+
 .day-log__entry {
+  position: relative;
+  z-index: 2;
   display: block;
 }
 
@@ -898,12 +911,14 @@ body {
 
 .day-log__remove {
   position: absolute;
-  left: -1rem;
-  top: 50%;
-  transform: translateY(-50%);
+  left: -0.75rem;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
   padding: 0;
-  width: 2.5rem;
-  height: 1.5rem;
+  width: 2rem;
   border: none;
   background: none;
   color: var(--color-text-muted);
@@ -916,21 +931,24 @@ body {
 
 .day-log__remove-icon {
   display: block;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
 }
 
 .day-log__cycle:hover .day-log__remove {
   opacity: 1;
   pointer-events: auto;
+  color: var(--color-text-muted);
 }
 
-.day-log__remove:hover,
+/* Red only when the X is actually hovered (clickable) */
+.day-log__cycle:hover .day-log__remove:hover,
 .day-log__remove:focus {
   color: #dc2626;
 }
 
-.day-log__remove:hover {
+.day-log__remove:active {
   color: #b91c1c;
 }
 
