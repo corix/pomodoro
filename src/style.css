@@ -96,8 +96,8 @@
 /* ─── Base & layout ─── */
 body {
   margin: 0;
-  min-height: 100vh;
   padding-top: var(--page-top-padding);
+  padding-bottom: 0;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);
@@ -220,20 +220,20 @@ body {
 #app {
   width: 100%;
   max-width: 36rem;
-  padding: var(--space-xl);
+  padding: var(--space-xl) var(--space-xl) 0;
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
 }
 
-/* Timer fixed at top of viewport; log below within same viewport, scrolls when needed */
+/* Timer at top, log below; page scrolls when content overflows. No min-height so empty log doesn't leave a big gap. */
 .timer-viewport {
-  height: calc(100vh - var(--page-top-padding));
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  min-height: 0;
+  padding-bottom: 0;
+  margin-bottom: 0;
 }
 
 .timer-viewport > .timer {
@@ -241,10 +241,10 @@ body {
 }
 
 .timer-viewport > .day-log {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  flex-shrink: 0;
+  padding-left: 1.5rem; /* room for delete (x) button so it isn’t clipped */
 }
+
 
 .mute-corner {
   position: fixed;
@@ -835,6 +835,14 @@ body {
   border-top: 1px solid var(--color-border-subtle);
 }
 
+.day-log--has-entries {
+  padding-bottom: var(--space-xs);
+}
+
+.day-log--expanded .day-log__view-all {
+  margin-bottom: 100px;
+}
+
 .day-log__title {
   font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);
@@ -913,8 +921,11 @@ body {
   position: relative;
   margin-left: -0.75rem;
   padding-left: 0.75rem;
+  padding-right: 20px;
   padding-top: var(--space-xs);
   padding-bottom: var(--space-xs);
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* Invisible strip in gutter so hovering where the x is still triggers row hover */

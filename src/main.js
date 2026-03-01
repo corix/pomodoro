@@ -86,6 +86,7 @@ const el = {
   muteBtn: document.getElementById('mute-btn'),
   glowPulses: document.getElementById('glow-pulses'),
   ripples: document.getElementById('ripples'),
+  dayLog: document.getElementById('day-log'),
   dayLogSummary: document.getElementById('day-log-summary'),
   dayLogCycles: document.getElementById('day-log-cycles'),
   dayLogClear: document.getElementById('day-log-clear'),
@@ -117,6 +118,7 @@ let glowPulseIndex = 0;
 
 /** Cache key for the log list so we don't re-render it every tick (avoids x flicker). */
 let lastRenderedLogKey = '';
+let lastRenderedLogExpanded = false;
 
 /** Previous mode so we can delay updating the newly active counter until after its scale-up transition. */
 let lastCurrentMode = null;
@@ -382,8 +384,10 @@ function render() {
     const logKey = sorted.map((e) => e.completedAt).join(',');
     const maxVisible = 5;
     const visibleEntries = logExpanded ? sorted : sorted.slice(0, maxVisible);
-    if (logKey !== lastRenderedLogKey) {
+    const logViewChanged = logKey !== lastRenderedLogKey || logExpanded !== lastRenderedLogExpanded;
+    if (logViewChanged) {
       lastRenderedLogKey = logKey;
+      lastRenderedLogExpanded = logExpanded;
       el.dayLogCycles.innerHTML = visibleEntries
       .map((entry, i) => {
         const timePart = `<span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}`;
@@ -416,6 +420,10 @@ function render() {
       } else {
         el.dayLogViewAll.hidden = true;
       }
+    }
+    if (el.dayLog) {
+      el.dayLog.classList.toggle('day-log--has-entries', totalEntries > 0);
+      el.dayLog.classList.toggle('day-log--expanded', logExpanded);
     }
   }
 
