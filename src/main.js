@@ -53,7 +53,7 @@ function playSegmentEndSound() {
 
 function playDingDong() {
   if (isCountdownMuted()) return;
-  const pentatonic = [523, 587, 659, 784, 440];
+  const pentatonic = [659, 784, 880, 1046, 554];
   const high = pentatonic[3];
   const low = pentatonic[0];
   const noteDuration = 0.045;
@@ -298,10 +298,9 @@ function tick() {
   if (remaining <= 0) return;
   setTimeRemaining(remaining - 1);
   const nowRemaining = getTimeRemaining();
-  if (nowRemaining >= 1 && nowRemaining <= 5) {
-    const pentatonic = [784, 659, 587, 523, 440];
-    playBeep({ frequency: pentatonic[5 - nowRemaining], duration: 0.5 });
+  if (nowRemaining >= 1 && nowRemaining <= 4) {
     triggerGlowPulse(nowRemaining);
+    playBeep({ frequency: 1046, duration: 0.12 });
   }
   if (nowRemaining <= 0) {
     triggerTransitionGlow();
