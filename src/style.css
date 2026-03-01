@@ -417,6 +417,22 @@ body {
   display: none;
 }
 
+/* When segment is active but controls should stay hidden (no time elapsed, paused) */
+.timer__segment--controls-hidden .timer__btn--restart,
+.timer__segment--controls-hidden .timer__btn--skip {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* Break: hide restart button until time has elapsed (e.g. after restart); keep space so layout doesn't shift */
+.timer__segment--break.timer__segment--break-restart-hidden .timer__btn--restart {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
 /* Restart and Skip: no fill, dark shade */
 .timer__segment .timer__btn--restart,
 .timer__segment .timer__btn--skip {
@@ -427,6 +443,37 @@ body {
 .timer__segment .timer__btn--restart:hover,
 .timer__segment .timer__btn--skip:hover {
   color: var(--color-text-muted);
+}
+
+.timer__segment .timer__btn--skip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.timer__segment--active .timer__btn--skip:disabled {
+  opacity: 0.4;
+}
+
+.timer__segment--active:hover .timer__btn--skip:disabled {
+  opacity: 0.4;
+}
+
+/* Break button: show skip icon when paused with no break elapsed, otherwise checkmark */
+.timer__segment--break .timer__btn--skip .timer__icon--skip {
+  display: none;
+}
+
+.timer__segment--break .timer__btn--skip .timer__icon--check {
+  display: block;
+}
+
+.timer__segment--break .timer__btn--skip.timer__btn--break-skip-icon .timer__icon--skip {
+  display: block;
+}
+
+.timer__segment--break .timer__btn--skip.timer__btn--break-skip-icon .timer__icon--check {
+  display: none;
 }
 
 /* Restart and Skip only visible on segment hover */
@@ -800,8 +847,8 @@ body {
 }
 
 .day-log__cycles {
-  margin: 0;
-  padding-left: 0;
+  margin: 0 0 0 -1rem;
+  padding-left: 1rem;
   list-style: none;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
@@ -809,11 +856,15 @@ body {
 }
 
 .day-log__cycle {
-  margin-bottom: var(--space-xs);
+  position: relative;
+  margin-left: -1rem;
+  padding-left: 1rem;
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
 }
 
-.day-log__cycle:last-child {
-  margin-bottom: 0;
+.day-log__entry {
+  display: block;
 }
 
 .day-log__durations {
@@ -843,5 +894,48 @@ body {
 
 .day-log__sep {
   color: var(--color-text-subtle);
+}
+
+.day-log__remove {
+  position: absolute;
+  left: -1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0;
+  width: 2.5rem;
+  height: 1.5rem;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.day-log__remove-icon {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.day-log__cycle:hover .day-log__remove {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.day-log__remove:hover,
+.day-log__remove:focus {
+  color: #dc2626;
+}
+
+.day-log__remove:hover {
+  color: #b91c1c;
+}
+
+.day-log__remove:focus-visible {
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
 }
 

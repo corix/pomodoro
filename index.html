@@ -26,7 +26,7 @@
         <main class="timer" role="timer" aria-live="polite">
             <div class="timer__status-row">
                 <div class="timer__status-row-inner">
-                    <p class="timer__status" id="timer-status" aria-live="polite">Pomodoro is paused</p>
+                    <p class="timer__status" id="timer-status" aria-live="polite">Timer is paused</p>
                     <div class="timer__presets" id="presets">
                     <button type="button" class="timer__btn timer__btn--new-pomodoro" data-work="25" data-break="5" aria-label="New pomodoro: 25 min work, 5 min break">25:5</button>
                     <button type="button" class="timer__btn timer__btn--new-pomodoro" data-work="45" data-break="15" aria-label="New pomodoro: 45 min work, 15 min break">45:15</button>
@@ -49,8 +49,8 @@
                                 </svg>
                             </button>
                             <input type="text" class="timer__time timer__time--input" id="time-display-work" aria-label="Work time remaining" inputmode="numeric" placeholder="0:00" />
-                            <button type="button" class="timer__btn timer__btn--icon timer__btn--secondary timer__btn--skip" aria-label="Skip to next segment">
-                                <svg class="timer__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+                            <button type="button" class="timer__btn timer__btn--icon timer__btn--secondary timer__btn--skip" aria-label="Complete work and continue">
+                                <svg class="timer__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
                             </button>
                         </div>
                     </div>
@@ -66,8 +66,9 @@
                                 </svg>
                             </button>
                             <input type="text" class="timer__time timer__time--input" id="time-display-break" aria-label="Break time remaining" inputmode="numeric" placeholder="0:00" />
-                            <button type="button" class="timer__btn timer__btn--icon timer__btn--secondary timer__btn--skip" aria-label="Skip to next segment">
-                                <svg class="timer__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+                            <button type="button" class="timer__btn timer__btn--icon timer__btn--secondary timer__btn--skip" id="break-skip-btn" aria-label="Complete break and continue">
+                                <svg class="timer__icon timer__icon--skip" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+                                <svg class="timer__icon timer__icon--check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
                             </button>
                         </div>
                     </div>

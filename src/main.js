@@ -73,6 +73,10 @@ const el = {
   timerStatus: document.getElementById('timer-status'),
   segmentWork: document.getElementById('segment-work'),
   segmentBreak: document.getElementById('segment-break'),
+  restartWorkBtn: document.querySelector('#segment-work .timer__btn--restart'),
+  skipWorkBtn: document.querySelector('#segment-work .timer__btn--skip'),
+  restartBreakBtn: document.querySelector('#segment-break .timer__btn--restart'),
+  skipBreakBtn: document.getElementById('break-skip-btn'),
   timeDisplayWork: document.getElementById('time-display-work'),
   timeDisplayBreak: document.getElementById('time-display-break'),
   pauseBtn: document.getElementById('pause-btn'),
@@ -110,6 +114,9 @@ let state = {
 let logExpanded = false;
 
 let glowPulseIndex = 0;
+
+/** Cache key for the log list so we don't re-render it every tick (avoids x flicker). */
+let lastRenderedLogKey = '';
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -184,30 +191,37 @@ function setTimeRemaining(seconds) {
 
 /** Call when a full work+break cycle finishes (transitioning from break → work). */
 /** @param breakElapsedSeconds - actual break time; if omitted, break ran to zero so use full duration */
-function recordCompletedCycle(breakElapsedSeconds) {
+/** @param omitBreak - if true, entry omits break (e.g. skipped break with no time elapsed while paused) */
+function recordCompletedCycle(breakElapsedSeconds, omitBreak) {
   ensureDayStarted();
-  const breakTime = breakElapsedSeconds ?? state.breakDuration;
-  state.completedCycles.push({
+  const breakTime = omitBreak ? 0 : (breakElapsedSeconds ?? state.breakDuration);
+  const entry = {
     completedAt: Date.now(),
     type: 'cycle',
     workDuration: state.workDuration,
     breakDuration: breakTime,
     intendedBreakDuration: state.breakDuration,
-  });
+  };
+  if (omitBreak) entry.omitBreak = true;
+  state.completedCycles.push(entry);
 }
 
 /** Log the pending skipped-work entry (work was skipped, now break has finished or been skipped). */
-function recordPendingSkippedWork(breakElapsedSeconds) {
+/** @param breakElapsedSeconds - actual break time */
+/** @param omitBreak - if true, entry omits break in display */
+function recordPendingSkippedWork(breakElapsedSeconds, omitBreak) {
   if (!state.pendingSkippedWork) return;
   ensureDayStarted();
-  state.completedCycles.push({
+  const entry = {
     completedAt: Date.now(),
     type: 'skipped_work',
     workElapsedSeconds: state.pendingSkippedWork.workElapsedSeconds,
     workDuration: state.pendingSkippedWork.workDuration,
-    breakElapsedSeconds,
+    breakElapsedSeconds: omitBreak ? 0 : breakElapsedSeconds,
     intendedBreakDuration: state.breakDuration,
-  });
+  };
+  if (omitBreak) entry.omitBreak = true;
+  state.completedCycles.push(entry);
   state.pendingSkippedWork = null;
 }
 
@@ -306,15 +320,26 @@ function render() {
     el.timeDisplayBreak.value = formatTime(state.breakRemainingSeconds);
   }
 
+  const workElapsed = state.workDuration - state.workRemainingSeconds;
+  const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
+  const hideWorkControls = state.currentMode === 'work' && !state.isRunning && workElapsed < 1;
+  const hideBreakControls = state.currentMode === 'break' && breakElapsed < 1 && state.isRunning;
+  const hideBreakRestartBtn = state.currentMode === 'break' && breakElapsed < 1;
+
   el.segmentWork.classList.toggle('timer__segment--active', state.currentMode === 'work');
   el.segmentBreak.classList.toggle('timer__segment--active', state.currentMode === 'break');
+  el.segmentWork.classList.toggle('timer__segment--controls-hidden', hideWorkControls);
+  el.segmentBreak.classList.toggle('timer__segment--controls-hidden', hideBreakControls);
+  el.segmentBreak.classList.toggle('timer__segment--break-restart-hidden', hideBreakRestartBtn);
   el.segmentWork.setAttribute('aria-current', state.currentMode === 'work' ? 'true' : 'false');
   el.segmentBreak.setAttribute('aria-current', state.currentMode === 'break' ? 'true' : 'false');
 
   if (state.isRunning) {
-    el.timerStatus.innerHTML = 'Pomodoro is <span class="timer__status-highlight">running</span>';
+    el.timerStatus.innerHTML = 'Timer is <span class="timer__status-highlight">running</span>';
+  } else if (state.currentMode === 'work' && state.workRemainingSeconds === getDuration('work')) {
+    el.timerStatus.textContent = 'Timer is ready';
   } else {
-    el.timerStatus.textContent = 'Pomodoro is paused';
+    el.timerStatus.textContent = 'Timer is paused';
   }
   el.pauseBtn.setAttribute('aria-label', state.isRunning ? 'Stop timer' : 'Start timer');
   el.pauseBtn.setAttribute('data-state', state.isRunning ? 'running' : 'stopped');
@@ -331,32 +356,62 @@ function render() {
   el.progressWork.style.setProperty('--progress', String(workProgress));
   el.progressBreak.style.setProperty('--progress', String(breakProgress));
 
+  if (el.restartWorkBtn) el.restartWorkBtn.hidden = hideWorkControls;
+  if (el.skipWorkBtn) el.skipWorkBtn.hidden = hideWorkControls;
+  if (el.restartBreakBtn) el.restartBreakBtn.hidden = hideBreakRestartBtn;
+  if (el.skipBreakBtn) {
+    el.skipBreakBtn.hidden = hideBreakControls;
+    const showSkipIcon = !hideBreakControls && state.currentMode === 'break' && !state.isRunning && breakElapsed < 1;
+    el.skipBreakBtn.classList.toggle('timer__btn--break-skip-icon', showSkipIcon);
+    if (!el.skipBreakBtn.hidden) {
+      el.skipBreakBtn.setAttribute('aria-label', 'Complete break and continue');
+    }
+  }
+
   if (el.dayLogSummary && el.dayLogCycles) {
-    const cyclesOnly = state.completedCycles.filter((e) => e.type !== 'skipped_work');
-    const n = cyclesOnly.length;
     const totalEntries = state.completedCycles.length;
-    if (n === 0) {
-      el.dayLogSummary.textContent = 'No pomodoros completed yet.';
+    // "Pomodoro in progress" when timer is running or until elapsed work time is entered in the log
+    const hasUnloggedWorkTime =
+      state.isRunning ||
+      workElapsed > 0 ||
+      state.pendingSkippedWork != null ||
+      state.workSegmentCompletedByTimer;
+    if (totalEntries === 0) {
+      el.dayLogSummary.textContent = hasUnloggedWorkTime ? 'Pomodoro in progress…' : 'Nothing yet.';
     } else {
-      el.dayLogSummary.textContent = n === 1 ? '1 pomodoro completed' : `${n} pomodoros completed`;
+      el.dayLogSummary.textContent = totalEntries === 1 ? '1 pomodoro completed' : `${totalEntries} pomodoros completed`;
     }
     if (el.dayLogClear) el.dayLogClear.hidden = totalEntries === 0;
     const sorted = [...state.completedCycles].sort((a, b) => b.completedAt - a.completedAt);
+    const logKey = sorted.map((e) => e.completedAt).join(',');
     const maxVisible = 5;
     const visibleEntries = logExpanded ? sorted : sorted.slice(0, maxVisible);
-    el.dayLogCycles.innerHTML = visibleEntries
-      .map((entry) => {
+    if (logKey !== lastRenderedLogKey) {
+      lastRenderedLogKey = logKey;
+      el.dayLogCycles.innerHTML = visibleEntries
+      .map((entry, i) => {
+        const timePart = `<span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}`;
+        const removeBtn = `<button type="button" class="day-log__remove" data-sorted-index="${i}" aria-label="Remove entry"><svg class="day-log__remove-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
         if (entry.type === 'skipped_work') {
+          const workPart = `<span class="day-log__dur day-log__dur--work-skipped">${formatDuration(entry.workElapsedSeconds)}</span>`;
+          if (entry.omitBreak) {
+            return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
+          }
           const breakElapsed = entry.breakElapsedSeconds ?? 0;
           const breakShort = typeof entry.intendedBreakDuration === 'number' && breakElapsed < entry.intendedBreakDuration;
           const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
-          return `<li class="day-log__cycle"><span class="day-log__dur day-log__dur--work-skipped">${formatDuration(entry.workElapsedSeconds)}</span> + <span class="${breakClass}">${formatDuration(breakElapsed)}</span> <span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}</li>`;
+          return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(breakElapsed)}</span> ${timePart}</span></li>`;
+        }
+        const workPart = `<span class="day-log__dur day-log__dur--work">${formatDuration(entry.workDuration)}</span>`;
+        if (entry.omitBreak) {
+          return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
         }
         const breakShort = typeof entry.intendedBreakDuration === 'number' && entry.breakDuration < entry.intendedBreakDuration;
         const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
-        return `<li class="day-log__cycle"><span class="day-log__dur day-log__dur--work">${formatDuration(entry.workDuration)}</span> + <span class="${breakClass}">${formatDuration(entry.breakDuration)}</span> <span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}</li>`;
+        return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(entry.breakDuration)}</span> ${timePart}</span></li>`;
       })
       .join('');
+    }
     if (el.dayLogViewAll) {
       if (totalEntries > maxVisible) {
         el.dayLogViewAll.hidden = false;
@@ -464,15 +519,17 @@ function setCurrentMode(mode) {
   render();
 }
 
-/** If in break and any time elapsed, record cycle or skipped-work to log and clear flags. */
+/** If in break, record cycle or skipped-work to log and clear flags. When paused and no break elapsed, omit break in entry. */
 function flushBreakToLogIfElapsed() {
   if (state.currentMode !== 'break') return;
   const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
-  if (breakElapsed <= 0) return;
+  const omitBreak = !state.isRunning && breakElapsed <= 0;
+  if (breakElapsed <= 0 && !omitBreak) return;
+  if (!state.pendingSkippedWork && !state.workSegmentCompletedByTimer) return;
   if (state.pendingSkippedWork) {
-    recordPendingSkippedWork(breakElapsed);
+    recordPendingSkippedWork(omitBreak ? 0 : breakElapsed, omitBreak);
   } else if (state.workSegmentCompletedByTimer) {
-    recordCompletedCycle(breakElapsed);
+    recordCompletedCycle(omitBreak ? 0 : breakElapsed, omitBreak);
     state.workSegmentCompletedByTimer = false;
   }
 }
@@ -512,9 +569,14 @@ function toggleMute() {
   render();
 }
 
-function restart() {
+function restart(mode) {
   stop();
-  setTimeRemaining(getDuration(state.currentMode));
+  const segment = mode === 'break' ? 'break' : 'work';
+  if (segment === 'break') {
+    state.breakRemainingSeconds = getDuration('break');
+  } else {
+    state.workRemainingSeconds = getDuration('work');
+  }
   saveState();
   render();
 }
@@ -523,19 +585,11 @@ function skip() {
   if (state.currentMode === 'break') {
     flushBreakToLogIfElapsed();
   } else if (state.currentMode === 'work') {
-    if (state.isRunning) {
+    const workElapsed = state.workDuration - state.workRemainingSeconds;
+    if (workElapsed >= 1) {
       if (state.workRemainingSeconds <= 1) {
         state.workSegmentCompletedByTimer = true;
       } else {
-        state.pendingSkippedWork = {
-          workElapsedSeconds: state.workDuration - state.workRemainingSeconds,
-          workDuration: state.workDuration,
-        };
-        state.workSegmentCompletedByTimer = false;
-      }
-    } else {
-      const workElapsed = state.workDuration - state.workRemainingSeconds;
-      if (workElapsed > 0) {
         state.pendingSkippedWork = {
           workElapsedSeconds: workElapsed,
           workDuration: state.workDuration,
@@ -544,11 +598,8 @@ function skip() {
       }
     }
   }
-  if (state.currentMode === 'work') {
-    state.workRemainingSeconds = state.workDuration;
-  } else {
-    state.breakRemainingSeconds = state.breakDuration;
-  }
+  state.workRemainingSeconds = getDuration('work');
+  state.breakRemainingSeconds = getDuration('break');
   state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
   saveState();
   render();
@@ -556,6 +607,16 @@ function skip() {
 
 function clearLog() {
   state.completedCycles = [];
+  saveState();
+  render();
+}
+
+/** Remove a single log entry by its index in the sorted list. Does not affect timer state. */
+function removeLogEntry(sortedIndex) {
+  const sorted = [...state.completedCycles].sort((a, b) => b.completedAt - a.completedAt);
+  const entry = sorted[sortedIndex];
+  if (!entry) return;
+  state.completedCycles = state.completedCycles.filter((e) => e !== entry);
   saveState();
   render();
 }
@@ -590,6 +651,14 @@ function init() {
   el.pauseBtn.addEventListener('click', handlePlayPause);
   if (el.muteBtn) el.muteBtn.addEventListener('click', toggleMute);
   if (el.dayLogClear) el.dayLogClear.addEventListener('click', clearLog);
+  if (el.dayLogCycles) {
+    el.dayLogCycles.addEventListener('click', (e) => {
+      const btn = e.target.closest('.day-log__remove');
+      if (!btn) return;
+      const index = parseInt(btn.getAttribute('data-sorted-index'), 10);
+      if (!Number.isNaN(index)) removeLogEntry(index);
+    });
+  }
   if (el.dayLogViewAll) {
     el.dayLogViewAll.addEventListener('click', () => {
       logExpanded = !logExpanded;
@@ -597,7 +666,12 @@ function init() {
     });
   }
   el.timer.addEventListener('click', (e) => {
-    if (e.target.closest('.timer__btn--restart')) restart();
+    const restartBtn = e.target.closest('.timer__btn--restart');
+    if (restartBtn) {
+      const mode = restartBtn.getAttribute('data-mode');
+      restart(mode === 'break' ? 'break' : 'work');
+      return;
+    }
     if (e.target.closest('.timer__btn--skip')) skip();
   });
   el.presets.addEventListener('click', (e) => {
