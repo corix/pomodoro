@@ -19,14 +19,15 @@ This is a lightweight web browser app. It's a "pomodoro" timer used for alternat
 * Start, pause, reset, skip to next segment
 * Adjust segment duration: user can change the duration of work and break segments independently
 
-### Stage 2 (current)
+### Stage 2 —- DONE ✓
 * Persist on browser reload (localstorage)
 * Visual progress indicator on active timer
 * Play sound when the countdown approaches zero
 
-### Stage 3
-* Pomo counter / show how much time has passed in work/break
-* Dark/light mode
+### Stage 3 -- current
+* Show how many total pomodoros (one work+break cycle) have been completed
+* Show a day's log of how much time has passed in each mode, including time elapsed when the timer was paused, in the form of a donut graph
 
 ## Idea backlog
 * Choose total duration: user can set the total time and the timer will automatically assign durations for work and break based on a 5:1 ratio
+* Dark/light mode
