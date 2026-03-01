@@ -220,6 +220,13 @@ body {
   top: var(--space-md);
   right: var(--space-md);
   z-index: 10;
+  background: transparent;
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-subtle);
+}
+
+.mute-corner:hover {
+  color: var(--color-text-muted);
 }
 
 /* ─── Timer block ─── */
@@ -573,12 +580,25 @@ body {
   box-shadow: 0 2px 0 var(--color-error-shadow);
 }
 
-/* Mute countdown: show volume when unmuted, muted icon when muted */
+/* Mute countdown: show volume when unmuted, muted icon when muted; subdued styling */
+.timer__btn--mute {
+  background: transparent;
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-subtle);
+}
+.timer__btn--mute:hover {
+  background: transparent;
+  color: var(--color-text-muted);
+}
 .timer__btn--mute .timer__icon--muted {
   display: none;
 }
 .timer__btn--mute .timer__icon--volume {
   display: block;
+}
+.timer__btn--mute[data-muted="true"] {
+  /* Darker, slightly orange-shifted red to optically match stop button */
+  color: hsl(10, 72%, 40%);
 }
 .timer__btn--mute[data-muted="true"] .timer__icon--volume {
   display: none;
