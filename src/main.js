@@ -419,27 +419,29 @@ function render() {
       lastRenderedLogKey = logKey;
       lastRenderedLogExpanded = logExpanded;
       lastRenderedVisibleCount = visibleCount;
+      const isNewEntry = sorted.length > prevCount;
       el.dayLogCycles.innerHTML = visibleEntries
       .map((entry, i) => {
+        const cycleClass = i === 0 && isNewEntry ? 'day-log__cycle day-log__cycle--new' : 'day-log__cycle';
         const timePart = `<span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}`;
         const removeBtn = `<button type="button" class="day-log__remove" data-sorted-index="${i}" aria-label="Remove entry"><svg class="day-log__remove-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
         if (entry.type === 'skipped_work') {
           const workPart = `<span class="day-log__dur day-log__dur--work-skipped">${formatDuration(entry.workElapsedSeconds)}</span>`;
           if (entry.omitBreak) {
-            return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
+            return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
           }
           const breakElapsed = entry.breakElapsedSeconds ?? 0;
           const breakShort = typeof entry.intendedBreakDuration === 'number' && breakElapsed < entry.intendedBreakDuration;
           const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
-          return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(breakElapsed)}</span> ${timePart}</span></li>`;
+          return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(breakElapsed)}</span> ${timePart}</span></li>`;
         }
         const workPart = `<span class="day-log__dur day-log__dur--work">${formatDuration(entry.workDuration)}</span>`;
         if (entry.omitBreak) {
-          return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
+          return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} ${timePart}</span></li>`;
         }
         const breakShort = typeof entry.intendedBreakDuration === 'number' && entry.breakDuration < entry.intendedBreakDuration;
         const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
-        return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(entry.breakDuration)}</span> ${timePart}</span></li>`;
+        return `<li class="${cycleClass}">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(entry.breakDuration)}</span> ${timePart}</span></li>`;
       })
       .join('');
       if (justRevealedRemainingEntries) {
@@ -448,9 +450,8 @@ function render() {
           li.classList.add('day-log__cycle--fade-in');
           li.addEventListener('animationend', () => li.classList.remove('day-log__cycle--fade-in'), { once: true });
         });
-      } else if (sorted.length > prevCount && el.dayLogCycles.firstElementChild) {
+      } else if (isNewEntry && el.dayLogCycles.firstElementChild) {
         const firstLi = el.dayLogCycles.firstElementChild;
-        firstLi.classList.add('day-log__cycle--new');
         firstLi.addEventListener('animationend', () => firstLi.classList.remove('day-log__cycle--new'), { once: true });
       }
     }

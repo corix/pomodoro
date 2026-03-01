@@ -871,19 +871,24 @@ body {
 
 .day-log__footer {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   gap: var(--space-sm);
   margin-top: var(--space-sm);
 }
 
 .day-log__expand-slot {
-  display: inline-flex;
-  align-items: baseline;
-  min-width: 7rem; /* keeps "clear" within 80px of "hide" */
+  position: relative;
+  width: 8rem; /* fixed width so "more" / "hide" never shift when label changes */
+  min-width: 8rem;
+  flex-shrink: 0;
+  min-height: 1.5em; /* reserve height so footer baseline is stable */
 }
 
 .day-log__expand-slot .day-log__view-all,
 .day-log__expand-slot .day-log__hide {
+  position: absolute;
+  left: 0;
+  bottom: 0;
   white-space: nowrap;
 }
 
@@ -899,9 +904,8 @@ body {
 .day-log__clear {
   display: inline-flex;
   align-items: center;
-  align-self: baseline;
   gap: var(--space-xs);
-  margin-left: -1.5rem;
+  margin-left: -2.25rem;
   background: none;
   border: none;
   padding: 0;
