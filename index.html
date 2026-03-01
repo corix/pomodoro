@@ -82,6 +82,15 @@
                 </div>
             </div>
         </main>
+        <section class="day-log" id="day-log" aria-label="Today's completed pomodoros">
+            <h2 class="day-log__title">Today</h2>
+            <p class="day-log__summary-row">
+                <span id="day-log-summary">No pomodoros completed yet.</span>
+                <button type="button" class="day-log__clear" id="day-log-clear" aria-label="Clear all log entries">Clear all</button>
+            </p>
+            <ol class="day-log__cycles" id="day-log-cycles" aria-label="Completed cycles"></ol>
+            <button type="button" class="day-log__view-all" id="day-log-view-all" aria-label="Show all log entries" hidden>view all</button>
+        </section>
     </div>
     <script type="module" src="/src/main.js"></script>
 </body>

@@ -24,6 +24,8 @@
   --color-mode-work-muted: #7c3aed;
   --color-mode-work-subtle: #6d28d9;
   --color-mode-work-bg: rgba(139, 92, 246, 0.12);
+  /* Warmer purple for skipped work in log */
+  --color-mode-work-skipped: #c4b5fd;
 
   /* Break mode – calm/rest */
   --color-mode-break: #0d9488;
@@ -37,6 +39,9 @@
   --color-success: #22c55e;
   --color-success-shadow: #15803d;
   --color-error-shadow: #b91c1c;
+
+  /* Log percentage (skipped work) */
+  --color-log-pct: #eab308;
 
   /* Transition (timer hit zero) – neutral, bright */
   --color-transition: #fafafa;
@@ -720,5 +725,119 @@ body {
 
 .timer__btn--new-pomodoro:hover {
   color: var(--color-text);
+}
+
+/* ─── Today's log (completed cycles) ─── */
+.day-log {
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.day-log__title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.day-log__summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+}
+
+.day-log__clear {
+  margin-left: var(--space-sm);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.day-log__clear:hover {
+  color: var(--color-text);
+}
+
+.day-log__clear:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.day-log__view-all {
+  margin-top: var(--space-sm);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.day-log__view-all:hover {
+  color: var(--color-text);
+}
+
+.day-log__view-all:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.day-log__cycles {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.day-log__cycle {
+  margin-bottom: var(--space-xs);
+}
+
+.day-log__cycle:last-child {
+  margin-bottom: 0;
+}
+
+.day-log__durations {
+  color: var(--color-text-subtle);
+  font-size: 0.9em;
+}
+
+.day-log__dur--work {
+  color: var(--color-mode-work);
+}
+
+.day-log__dur--break {
+  color: var(--color-mode-break);
+}
+
+.day-log__dur--work-skipped {
+  color: var(--color-mode-work-skipped);
+}
+
+.day-log__pct {
+  color: var(--color-log-pct);
+}
+
+.day-log__sep {
+  color: var(--color-text-subtle);
 }
 

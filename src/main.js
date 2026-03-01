@@ -3,6 +3,7 @@
 const WORK_SECONDS = 25 * 60;
 const BREAK_SECONDS = 5 * 60;
 const STORAGE_KEY = 'pomodoro-state';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 let audioContext = null;
 
@@ -81,6 +82,10 @@ const el = {
   muteBtn: document.getElementById('mute-btn'),
   glowPulses: document.getElementById('glow-pulses'),
   ripples: document.getElementById('ripples'),
+  dayLogSummary: document.getElementById('day-log-summary'),
+  dayLogCycles: document.getElementById('day-log-cycles'),
+  dayLogClear: document.getElementById('day-log-clear'),
+  dayLogViewAll: document.getElementById('day-log-view-all'),
 };
 
 let state = {
@@ -92,7 +97,17 @@ let state = {
   isRunning: false,
   intervalId: null,
   muted: false,
+  /** Current "day" starts when first timer runs; cleared after 24h */
+  dayStartedAt: null,
+  /** Completed work+break cycles this day: { completedAt, workDuration, breakDuration } */
+  completedCycles: [],
+  /** True when we entered break because work timer hit zero (so this break counts toward a completed cycle) */
+  workSegmentCompletedByTimer: false,
+  /** When work was skipped, store work elapsed/duration until break finishes or is skipped; then we log the incomplete entry */
+  pendingSkippedWork: null,
 };
+
+let logExpanded = false;
 
 let glowPulseIndex = 0;
 
@@ -100,6 +115,23 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function formatTimeOfDay(ts) {
+  const d = new Date(ts);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const hour12 = h % 12 || 12;
+  const ampm = h < 12 ? 'am' : 'pm';
+  return `${hour12}:${String(m).padStart(2, '0')}${ampm}`;
+}
+
+/** Format seconds as "Xm" or "Xm Ys" for log display. */
+function formatDuration(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
 }
 
 const MAX_DURATION_SECONDS = 55 * 60;
@@ -150,8 +182,47 @@ function setTimeRemaining(seconds) {
   }
 }
 
+/** Call when a full work+break cycle finishes (transitioning from break → work). */
+/** @param breakElapsedSeconds - actual break time; if omitted, break ran to zero so use full duration */
+function recordCompletedCycle(breakElapsedSeconds) {
+  ensureDayStarted();
+  const breakTime = breakElapsedSeconds ?? state.breakDuration;
+  state.completedCycles.push({
+    completedAt: Date.now(),
+    type: 'cycle',
+    workDuration: state.workDuration,
+    breakDuration: breakTime,
+  });
+}
+
+/** Log the pending skipped-work entry (work was skipped, now break has finished or been skipped). */
+function recordPendingSkippedWork(breakElapsedSeconds) {
+  if (!state.pendingSkippedWork) return;
+  ensureDayStarted();
+  state.completedCycles.push({
+    completedAt: Date.now(),
+    type: 'skipped_work',
+    workElapsedSeconds: state.pendingSkippedWork.workElapsedSeconds,
+    workDuration: state.pendingSkippedWork.workDuration,
+    breakElapsedSeconds,
+  });
+  state.pendingSkippedWork = null;
+}
+
 function getDuration(mode) {
   return mode === 'work' ? state.workDuration : state.breakDuration;
+}
+
+function isDayExpired() {
+  return state.dayStartedAt != null && Date.now() - state.dayStartedAt >= DAY_MS;
+}
+
+function ensureDayStarted() {
+  if (state.dayStartedAt == null || isDayExpired()) {
+    state.dayStartedAt = Date.now();
+    state.completedCycles = [];
+    state.pendingSkippedWork = null;
+  }
 }
 
 function saveState() {
@@ -163,6 +234,10 @@ function saveState() {
     currentMode: state.currentMode,
     isRunning: state.isRunning,
     muted: state.muted,
+    dayStartedAt: state.dayStartedAt,
+    completedCycles: state.completedCycles,
+    workSegmentCompletedByTimer: state.workSegmentCompletedByTimer,
+    pendingSkippedWork: state.pendingSkippedWork,
   };
   if (state.isRunning) {
     payload.lastSavedAt = Date.now();
@@ -186,6 +261,27 @@ function loadState() {
     state.currentMode = data.currentMode === 'break' ? 'break' : 'work';
     state.isRunning = Boolean(data.isRunning);
     if (typeof data.muted === 'boolean') state.muted = data.muted;
+
+    if (typeof data.dayStartedAt === 'number') state.dayStartedAt = data.dayStartedAt;
+    if (Array.isArray(data.completedCycles)) {
+      state.completedCycles = data.completedCycles.filter((c) => {
+        if (!c || typeof c.completedAt !== 'number') return false;
+        if (c.type === 'skipped_work') {
+          return typeof c.workElapsedSeconds === 'number' && typeof c.workDuration === 'number';
+        }
+        return typeof c.workDuration === 'number' && typeof c.breakDuration === 'number';
+      });
+    }
+    if (typeof data.workSegmentCompletedByTimer === 'boolean') state.workSegmentCompletedByTimer = data.workSegmentCompletedByTimer;
+    if (data.pendingSkippedWork && typeof data.pendingSkippedWork.workElapsedSeconds === 'number' && typeof data.pendingSkippedWork.workDuration === 'number') {
+      state.pendingSkippedWork = data.pendingSkippedWork;
+    }
+    if (isDayExpired()) {
+      state.dayStartedAt = null;
+      state.completedCycles = [];
+      state.workSegmentCompletedByTimer = false;
+      state.pendingSkippedWork = null;
+    }
 
     if (state.isRunning && typeof data.lastSavedAt === 'number') {
       const elapsed = Math.floor((Date.now() - data.lastSavedAt) / 1000);
@@ -232,6 +328,40 @@ function render() {
   const breakProgress = breakDuration > 0 ? 1 - state.breakRemainingSeconds / breakDuration : 0;
   el.progressWork.style.setProperty('--progress', String(workProgress));
   el.progressBreak.style.setProperty('--progress', String(breakProgress));
+
+  if (el.dayLogSummary && el.dayLogCycles) {
+    const cyclesOnly = state.completedCycles.filter((e) => e.type !== 'skipped_work');
+    const n = cyclesOnly.length;
+    const totalEntries = state.completedCycles.length;
+    if (n === 0) {
+      el.dayLogSummary.textContent = 'No pomodoros completed yet.';
+    } else {
+      el.dayLogSummary.textContent = n === 1 ? '1 pomodoro completed' : `${n} pomodoros completed`;
+    }
+    if (el.dayLogClear) el.dayLogClear.hidden = totalEntries === 0;
+    const sorted = [...state.completedCycles].sort((a, b) => b.completedAt - a.completedAt);
+    const maxVisible = 5;
+    const visibleEntries = logExpanded ? sorted : sorted.slice(0, maxVisible);
+    el.dayLogCycles.innerHTML = visibleEntries
+      .map((entry) => {
+        if (entry.type === 'skipped_work') {
+          const pct = entry.workDuration > 0 ? Math.round((entry.workElapsedSeconds / entry.workDuration) * 100) : 0;
+          const breakElapsed = entry.breakElapsedSeconds ?? 0;
+          return `<li class="day-log__cycle"><span class="day-log__dur day-log__dur--work-skipped">${formatDuration(entry.workElapsedSeconds)}</span> + <span class="day-log__dur day-log__dur--break">${formatDuration(breakElapsed)}</span> <span class="day-log__pct">— ${pct}%</span> <span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}</li>`;
+        }
+        return `<li class="day-log__cycle"><span class="day-log__dur day-log__dur--work">${formatDuration(entry.workDuration)}</span> + <span class="day-log__dur day-log__dur--break">${formatDuration(entry.breakDuration)}</span> <span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}</li>`;
+      })
+      .join('');
+    if (el.dayLogViewAll) {
+      if (totalEntries > maxVisible) {
+        el.dayLogViewAll.hidden = false;
+        el.dayLogViewAll.textContent = logExpanded ? 'show less' : 'view all';
+        el.dayLogViewAll.setAttribute('aria-label', logExpanded ? 'Show fewer log entries' : `Show all ${totalEntries} log entries`);
+      } else {
+        el.dayLogViewAll.hidden = true;
+      }
+    }
+  }
 }
 
 function triggerGlowPulse(remaining) {
@@ -303,6 +433,16 @@ function tick() {
     playBeep({ frequency: 1046, duration: 0.12 });
   }
   if (nowRemaining <= 0) {
+    if (state.currentMode === 'work') {
+      state.workSegmentCompletedByTimer = true;
+    } else if (state.currentMode === 'break') {
+      if (state.pendingSkippedWork) {
+        recordPendingSkippedWork(state.breakDuration);
+      } else if (state.workSegmentCompletedByTimer) {
+        recordCompletedCycle();
+        state.workSegmentCompletedByTimer = false;
+      }
+    }
     triggerTransitionGlow();
     playDingDong();
     setTimeRemaining(getDuration(state.currentMode));
@@ -332,6 +472,7 @@ function stop() {
 
 function start() {
   if (state.isRunning) return;
+  ensureDayStarted();
   getAudioContext();
   if (audioContext.state === 'suspended') {
     audioContext.resume();
@@ -362,11 +503,33 @@ function restart() {
 
 function skip() {
   if (state.currentMode === 'work') {
+    state.pendingSkippedWork = {
+      workElapsedSeconds: state.workDuration - state.workRemainingSeconds,
+      workDuration: state.workDuration,
+    };
+    state.workSegmentCompletedByTimer = false;
+  } else if (state.currentMode === 'break') {
+    if (state.pendingSkippedWork) {
+      const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
+      recordPendingSkippedWork(breakElapsed);
+    } else if (state.workSegmentCompletedByTimer) {
+      const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
+      recordCompletedCycle(breakElapsed);
+      state.workSegmentCompletedByTimer = false;
+    }
+  }
+  if (state.currentMode === 'work') {
     state.workRemainingSeconds = state.workDuration;
   } else {
     state.breakRemainingSeconds = state.breakDuration;
   }
   state.currentMode = state.currentMode === 'work' ? 'break' : 'work';
+  saveState();
+  render();
+}
+
+function clearLog() {
+  state.completedCycles = [];
   saveState();
   render();
 }
@@ -400,6 +563,13 @@ function init() {
   }
   el.pauseBtn.addEventListener('click', handlePlayPause);
   if (el.muteBtn) el.muteBtn.addEventListener('click', toggleMute);
+  if (el.dayLogClear) el.dayLogClear.addEventListener('click', clearLog);
+  if (el.dayLogViewAll) {
+    el.dayLogViewAll.addEventListener('click', () => {
+      logExpanded = !logExpanded;
+      render();
+    });
+  }
   el.timer.addEventListener('click', (e) => {
     if (e.target.closest('.timer__btn--restart')) restart();
     if (e.target.closest('.timer__btn--skip')) skip();
