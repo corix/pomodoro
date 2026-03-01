@@ -192,6 +192,7 @@ function recordCompletedCycle(breakElapsedSeconds) {
     type: 'cycle',
     workDuration: state.workDuration,
     breakDuration: breakTime,
+    intendedBreakDuration: state.breakDuration,
   });
 }
 
@@ -205,6 +206,7 @@ function recordPendingSkippedWork(breakElapsedSeconds) {
     workElapsedSeconds: state.pendingSkippedWork.workElapsedSeconds,
     workDuration: state.pendingSkippedWork.workDuration,
     breakElapsedSeconds,
+    intendedBreakDuration: state.breakDuration,
   });
   state.pendingSkippedWork = null;
 }
@@ -345,11 +347,14 @@ function render() {
     el.dayLogCycles.innerHTML = visibleEntries
       .map((entry) => {
         if (entry.type === 'skipped_work') {
-          const pct = entry.workDuration > 0 ? Math.round((entry.workElapsedSeconds / entry.workDuration) * 100) : 0;
           const breakElapsed = entry.breakElapsedSeconds ?? 0;
-          return `<li class="day-log__cycle"><span class="day-log__dur day-log__dur--work-skipped">${formatDuration(entry.workElapsedSeconds)}</span> + <span class="day-log__dur day-log__dur--break">${formatDuration(breakElapsed)}</span> <span class="day-log__pct">— ${pct}%</span> <span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}</li>`;
+          const breakShort = typeof entry.intendedBreakDuration === 'number' && breakElapsed < entry.intendedBreakDuration;
+          const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
+          return `<li class="day-log__cycle"><span class="day-log__dur day-log__dur--work-skipped">${formatDuration(entry.workElapsedSeconds)}</span> + <span class="${breakClass}">${formatDuration(breakElapsed)}</span> <span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}</li>`;
         }
-        return `<li class="day-log__cycle"><span class="day-log__dur day-log__dur--work">${formatDuration(entry.workDuration)}</span> + <span class="day-log__dur day-log__dur--break">${formatDuration(entry.breakDuration)}</span> <span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}</li>`;
+        const breakShort = typeof entry.intendedBreakDuration === 'number' && entry.breakDuration < entry.intendedBreakDuration;
+        const breakClass = breakShort ? 'day-log__dur day-log__dur--break day-log__dur--break-short' : 'day-log__dur day-log__dur--break';
+        return `<li class="day-log__cycle"><span class="day-log__dur day-log__dur--work">${formatDuration(entry.workDuration)}</span> + <span class="${breakClass}">${formatDuration(entry.breakDuration)}</span> <span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}</li>`;
       })
       .join('');
     if (el.dayLogViewAll) {
@@ -459,6 +464,19 @@ function setCurrentMode(mode) {
   render();
 }
 
+/** If in break and any time elapsed, record cycle or skipped-work to log and clear flags. */
+function flushBreakToLogIfElapsed() {
+  if (state.currentMode !== 'break') return;
+  const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
+  if (breakElapsed <= 0) return;
+  if (state.pendingSkippedWork) {
+    recordPendingSkippedWork(breakElapsed);
+  } else if (state.workSegmentCompletedByTimer) {
+    recordCompletedCycle(breakElapsed);
+    state.workSegmentCompletedByTimer = false;
+  }
+}
+
 function stop() {
   if (!state.isRunning) return;
   state.isRunning = false;
@@ -502,20 +520,28 @@ function restart() {
 }
 
 function skip() {
-  if (state.currentMode === 'work') {
-    state.pendingSkippedWork = {
-      workElapsedSeconds: state.workDuration - state.workRemainingSeconds,
-      workDuration: state.workDuration,
-    };
-    state.workSegmentCompletedByTimer = false;
-  } else if (state.currentMode === 'break') {
-    if (state.pendingSkippedWork) {
-      const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
-      recordPendingSkippedWork(breakElapsed);
-    } else if (state.workSegmentCompletedByTimer) {
-      const breakElapsed = state.breakDuration - state.breakRemainingSeconds;
-      recordCompletedCycle(breakElapsed);
-      state.workSegmentCompletedByTimer = false;
+  if (state.currentMode === 'break') {
+    flushBreakToLogIfElapsed();
+  } else if (state.currentMode === 'work') {
+    if (state.isRunning) {
+      if (state.workRemainingSeconds <= 1) {
+        state.workSegmentCompletedByTimer = true;
+      } else {
+        state.pendingSkippedWork = {
+          workElapsedSeconds: state.workDuration - state.workRemainingSeconds,
+          workDuration: state.workDuration,
+        };
+        state.workSegmentCompletedByTimer = false;
+      }
+    } else {
+      const workElapsed = state.workDuration - state.workRemainingSeconds;
+      if (workElapsed > 0) {
+        state.pendingSkippedWork = {
+          workElapsedSeconds: workElapsed,
+          workDuration: state.workDuration,
+        };
+        state.workSegmentCompletedByTimer = false;
+      }
     }
   }
   if (state.currentMode === 'work') {

@@ -829,6 +829,10 @@ body {
   color: var(--color-mode-break);
 }
 
+.day-log__dur--break-short {
+  color: color-mix(in srgb, var(--color-mode-break) 60%, white);
+}
+
 .day-log__dur--work-skipped {
   color: var(--color-mode-work-skipped);
 }
