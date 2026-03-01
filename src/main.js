@@ -91,6 +91,7 @@ const el = {
   dayLogCycles: document.getElementById('day-log-cycles'),
   dayLogClear: document.getElementById('day-log-clear'),
   dayLogViewAll: document.getElementById('day-log-view-all'),
+  dayLogHide: document.getElementById('day-log-hide'),
 };
 
 let state = {
@@ -113,12 +114,20 @@ let state = {
 };
 
 let logExpanded = false;
+/** When collapsed, how many entries to show (3 by default; can be 2, 1, 0 after deletes). Reset to min(3, total) when user clicks "hide". */
+let collapsedVisibleCount = 3;
+
+/** Timeout id for revealing remaining entries 3s after all visible were deleted. */
+let revealRemainingTimeoutId = null;
+/** When true, next render adds slide-in animation to first list item (after revealing remaining). */
+let justRevealedRemainingEntries = false;
 
 let glowPulseIndex = 0;
 
 /** Cache key for the log list so we don't re-render it every tick (avoids x flicker). */
 let lastRenderedLogKey = '';
 let lastRenderedLogExpanded = false;
+let lastRenderedVisibleCount = -1;
 
 /** Previous mode so we can delay updating the newly active counter until after its scale-up transition. */
 let lastCurrentMode = null;
@@ -366,28 +375,50 @@ function render() {
     }
   }
 
-  if (el.dayLogSummary && el.dayLogCycles) {
+  if (el.dayLogCycles) {
     const totalEntries = state.completedCycles.length;
-    // "Pomodoro in progress" when timer is running or until elapsed work time is entered in the log
-    const hasUnloggedWorkTime =
-      state.isRunning ||
-      workElapsed > 0 ||
-      state.pendingSkippedWork != null ||
-      state.workSegmentCompletedByTimer;
-    if (totalEntries === 0) {
-      el.dayLogSummary.textContent = hasUnloggedWorkTime ? 'Pomodoro in progress…' : 'Nothing yet.';
-    } else {
-      el.dayLogSummary.textContent = totalEntries === 1 ? '1 pomodoro completed' : `${totalEntries} pomodoros completed`;
+    if (el.dayLogSummary) {
+      if (totalEntries === 0) {
+        const workElapsed = state.workDuration - state.workRemainingSeconds;
+        const hasWorkTimeElapsed =
+          state.isRunning ||
+          workElapsed > 0 ||
+          state.pendingSkippedWork != null ||
+          state.workSegmentCompletedByTimer;
+        el.dayLogSummary.textContent = hasWorkTimeElapsed ? 'Pomodoro in progress…' : 'Nothing yet.';
+        el.dayLogSummary.hidden = false;
+      } else {
+        el.dayLogSummary.hidden = true;
+      }
     }
-    if (el.dayLogClear) el.dayLogClear.hidden = totalEntries === 0;
     const sorted = [...state.completedCycles].sort((a, b) => b.completedAt - a.completedAt);
     const logKey = sorted.map((e) => e.completedAt).join(',');
-    const maxVisible = 5;
-    const visibleEntries = logExpanded ? sorted : sorted.slice(0, maxVisible);
-    const logViewChanged = logKey !== lastRenderedLogKey || logExpanded !== lastRenderedLogExpanded;
+    const maxVisibleDefault = 3;
+    const prevEntryCount = lastRenderedLogKey ? lastRenderedLogKey.split(',').length : 0;
+    if (sorted.length > prevEntryCount) {
+      if (prevEntryCount <= 3 && sorted.length >= 4) {
+        logExpanded = false;
+        collapsedVisibleCount = 3;
+      } else if (!logExpanded) {
+        const addedCount = sorted.length - prevEntryCount;
+        collapsedVisibleCount = Math.min(3, collapsedVisibleCount + addedCount);
+      }
+    }
+    if (sorted.length >= 4 && !logExpanded) {
+      collapsedVisibleCount = Math.min(collapsedVisibleCount, 3);
+    }
+    if (sorted.length < 4 && logExpanded) {
+      logExpanded = false;
+      collapsedVisibleCount = Math.min(3, sorted.length);
+    }
+    const visibleCount = logExpanded ? sorted.length : Math.min(collapsedVisibleCount, sorted.length);
+    const visibleEntries = sorted.slice(0, visibleCount);
+    const logViewChanged = logKey !== lastRenderedLogKey || logExpanded !== lastRenderedLogExpanded || visibleCount !== lastRenderedVisibleCount;
     if (logViewChanged) {
+      const prevCount = lastRenderedLogKey ? lastRenderedLogKey.split(',').length : 0;
       lastRenderedLogKey = logKey;
       lastRenderedLogExpanded = logExpanded;
+      lastRenderedVisibleCount = visibleCount;
       el.dayLogCycles.innerHTML = visibleEntries
       .map((entry, i) => {
         const timePart = `<span class="day-log__sep">•</span> ${formatTimeOfDay(entry.completedAt)}`;
@@ -411,19 +442,37 @@ function render() {
         return `<li class="day-log__cycle">${removeBtn}<span class="day-log__entry">${workPart} + <span class="${breakClass}">${formatDuration(entry.breakDuration)}</span> ${timePart}</span></li>`;
       })
       .join('');
-    }
-    if (el.dayLogViewAll) {
-      if (totalEntries > maxVisible) {
-        el.dayLogViewAll.hidden = false;
-        el.dayLogViewAll.textContent = logExpanded ? 'show less' : 'view all';
-        el.dayLogViewAll.setAttribute('aria-label', logExpanded ? 'Show fewer log entries' : `Show all ${totalEntries} log entries`);
-      } else {
-        el.dayLogViewAll.hidden = true;
+      if (justRevealedRemainingEntries) {
+        justRevealedRemainingEntries = false;
+        Array.from(el.dayLogCycles.children).forEach((li) => {
+          li.classList.add('day-log__cycle--fade-in');
+          li.addEventListener('animationend', () => li.classList.remove('day-log__cycle--fade-in'), { once: true });
+        });
+      } else if (sorted.length > prevCount && el.dayLogCycles.firstElementChild) {
+        const firstLi = el.dayLogCycles.firstElementChild;
+        firstLi.classList.add('day-log__cycle--new');
+        firstLi.addEventListener('animationend', () => firstLi.classList.remove('day-log__cycle--new'), { once: true });
       }
     }
+    const showShowAll = !logExpanded && totalEntries > visibleCount;
+    const showHide = logExpanded && totalEntries >= 4;
+    if (el.dayLogViewAll) {
+      if (showShowAll) {
+        const chevronDown = '<svg class="day-log__view-all-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+        const hiddenCount = totalEntries - visibleCount;
+        el.dayLogViewAll.innerHTML = `${chevronDown} more (${hiddenCount})`;
+        el.dayLogViewAll.setAttribute('aria-label', `Show ${hiddenCount} more log entries`);
+      }
+      el.dayLogViewAll.hidden = !showShowAll;
+    }
+    if (el.dayLogHide) {
+      el.dayLogHide.hidden = !showHide;
+    }
+    if (el.dayLogClear) el.dayLogClear.hidden = !showHide;
     if (el.dayLog) {
       el.dayLog.classList.toggle('day-log--has-entries', totalEntries > 0);
       el.dayLog.classList.toggle('day-log--expanded', logExpanded);
+      el.dayLog.classList.toggle('day-log--entries-4-plus', totalEntries >= 4);
     }
   }
 
@@ -698,12 +747,55 @@ function init() {
       const btn = e.target.closest('.day-log__remove');
       if (!btn) return;
       const index = parseInt(btn.getAttribute('data-sorted-index'), 10);
-      if (!Number.isNaN(index)) removeLogEntry(index);
+      if (Number.isNaN(index)) return;
+      const li = btn.closest('.day-log__cycle');
+      if (!li) {
+        removeLogEntry(index);
+        return;
+      }
+      li.classList.add('day-log__cycle--removing');
+      li.addEventListener('transitionend', () => {
+        if (!logExpanded) collapsedVisibleCount = Math.max(0, collapsedVisibleCount - 1);
+        removeLogEntry(index);
+        if (!logExpanded && collapsedVisibleCount === 0 && state.completedCycles.length >= 1) {
+          if (revealRemainingTimeoutId != null) clearTimeout(revealRemainingTimeoutId);
+          revealRemainingTimeoutId = setTimeout(() => {
+            revealRemainingTimeoutId = null;
+            if (!el.dayLogViewAll || state.completedCycles.length === 0 || logExpanded) return;
+            el.dayLogViewAll.classList.add('day-log__view-all--fade-out');
+            setTimeout(() => {
+              el.dayLogViewAll.hidden = true;
+              el.dayLogViewAll.classList.remove('day-log__view-all--fade-out');
+              requestAnimationFrame(() => {
+                collapsedVisibleCount = Math.min(3, state.completedCycles.length);
+                justRevealedRemainingEntries = true;
+                render();
+              });
+            }, 300);
+          }, 3000);
+        }
+      }, { once: true });
     });
   }
   if (el.dayLogViewAll) {
     el.dayLogViewAll.addEventListener('click', () => {
-      logExpanded = !logExpanded;
+      if (revealRemainingTimeoutId != null) {
+        clearTimeout(revealRemainingTimeoutId);
+        revealRemainingTimeoutId = null;
+      }
+      logExpanded = true;
+      render();
+    });
+  }
+  if (el.dayLogHide) {
+    el.dayLogHide.addEventListener('click', () => {
+      if (revealRemainingTimeoutId != null) {
+        clearTimeout(revealRemainingTimeoutId);
+        revealRemainingTimeoutId = null;
+      }
+      logExpanded = false;
+      const totalEntries = state.completedCycles.length;
+      collapsedVisibleCount = Math.min(3, totalEntries);
       render();
     });
   }
