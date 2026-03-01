@@ -311,9 +311,40 @@ body {
     color-mix(in srgb, var(--color-bg-muted) 98%, black) 100%
   );
   border-radius: var(--radius-2xl);
-  transition: background 0.4s ease, padding 0.4s ease, opacity 0.4s ease;
+  transition:
+    padding 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+}
+
+/* Active state gradient overlay – fades in for smooth transition (no gradient snap) */
+.timer__segment::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--color-bg-elevated) 92%, white) 0%,
+      var(--color-bg-elevated) 40%,
+      color-mix(in srgb, var(--color-bg-elevated) 96%, black) 100%
+    ),
+    radial-gradient(
+      ellipse 85% 75% at 50% 50%,
+      color-mix(in srgb, var(--color-bg-elevated) 80%, transparent) 0%,
+      color-mix(in srgb, var(--color-bg-elevated) 96%, transparent) 60%,
+      var(--color-bg-elevated) 100%
+    );
+  opacity: 0;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+}
+.timer__segment--active::after {
+  opacity: 1;
 }
 
 /* Frosted glass noise overlay */
@@ -326,9 +357,10 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' result='noise'/%3E%3CfeColorMatrix in='noise' type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' fill='white' fill-opacity='0.5'/%3E%3C/svg%3E");
   background-size: 256px 256px;
   opacity: 0.04;
+  z-index: 1;
 }
 
-/* Inactive segment: darker and smaller */
+/* Inactive segment: darker and smaller; subtle scale so transition feels smoother */
 .timer__segment:not(.timer__segment--active) {
   background: linear-gradient(
     165deg,
@@ -336,7 +368,11 @@ body {
     var(--color-bg) 50%,
     color-mix(in srgb, var(--color-bg) 98%, black) 100%
   );
-  opacity: 0.7;
+  opacity: 0.72;
+  transform: scale(0.98);
+}
+.timer__segment--active {
+  transform: scale(1);
 }
 .timer__segment:not(.timer__segment--active)::before {
   opacity: 0.03;
@@ -361,7 +397,7 @@ body {
 .timer__segment .timer__time--input {
   color: color-mix(in srgb, var(--color-text) 88%, var(--color-text-muted));
   font-size: var(--text-xl);
-  transition: color 0.4s ease, font-size 0.4s ease, width 0.4s ease;
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.5s cubic-bezier(0.4, 0, 0.2, 1), width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .timer__segment-row {
@@ -415,25 +451,13 @@ body {
   font-weight: var(--font-weight-medium);
   color: var(--color-text);
   margin-bottom: var(--space-sm);
-  transition: color 0.4s ease, font-size 0.4s ease;
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .timer__segment--active {
   padding: var(--space-lg);
   padding-top: calc(4px + var(--space-lg));
-  background:
-    linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--color-bg-elevated) 92%, white) 0%,
-      var(--color-bg-elevated) 40%,
-      color-mix(in srgb, var(--color-bg-elevated) 96%, black) 100%
-    ),
-    radial-gradient(
-      ellipse 85% 75% at 50% 50%,
-      color-mix(in srgb, var(--color-bg-elevated) 80%, transparent) 0%,
-      color-mix(in srgb, var(--color-bg-elevated) 96%, transparent) 60%,
-      var(--color-bg-elevated) 100%
-    );
+  /* Background for active state is applied via ::after overlay so it can fade in */
 }
 .timer__segment--active::before {
   opacity: 0.055;
@@ -466,7 +490,7 @@ body {
   background: var(--color-border-subtle);
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
   overflow: hidden;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .timer__progress-bar {
@@ -474,7 +498,7 @@ body {
   width: calc((1 - var(--progress, 0)) * 100%);
   margin-left: auto;
   border-radius: 0 var(--radius-2xl) 0 0;
-  transition: width 0.25s ease;
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .timer__segment--work .timer__progress-bar {
