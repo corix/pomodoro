@@ -88,20 +88,24 @@
   --radius-xl: 1rem;      /* 16px */
   --radius-2xl: 1.5rem;   /* 24px – timer segments */
   --radius-full: 9999px;
+
+  /* Top padding as % of viewport height */
+  --page-top-padding: 10vh;
 }
 
 /* ─── Base & layout ─── */
 body {
   margin: 0;
   min-height: 100vh;
+  padding-top: var(--page-top-padding);
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--text-base);
   line-height: var(--line-height-normal);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
   position: relative;
 }
 
@@ -219,6 +223,27 @@ body {
   padding: var(--space-xl);
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Timer fixed at top of viewport; log below within same viewport, scrolls when needed */
+.timer-viewport {
+  height: calc(100vh - var(--page-top-padding));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+.timer-viewport > .timer {
+  flex-shrink: 0;
+}
+
+.timer-viewport > .day-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .mute-corner {
@@ -805,8 +830,8 @@ body {
 
 /* ─── Today's log (completed cycles) ─── */
 .day-log {
-  margin-top: var(--space-2xl);
-  padding-top: var(--space-lg);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
   border-top: 1px solid var(--color-border-subtle);
 }
 
