@@ -536,6 +536,12 @@ body {
   outline: none;
   box-shadow: 0 0 0 2px var(--color-focus-ring);
 }
+.timer__segment--work .timer__time--input:focus {
+  box-shadow: 0 0 0 2px var(--color-mode-work);
+}
+.timer__segment--break .timer__time--input:focus {
+  box-shadow: 0 0 0 2px var(--color-mode-break);
+}
 
 .timer__time--input::placeholder {
   color: var(--color-text-subtle);
