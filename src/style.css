@@ -80,7 +80,8 @@
   --radius-sm: 0.25rem;   /* 4px */
   --radius-md: 0.5rem;    /* 8px */
   --radius-lg: 0.75rem;   /* 12px */
-  --radius-xl: 1rem;     /* 16px */
+  --radius-xl: 1rem;      /* 16px */
+  --radius-2xl: 1.5rem;   /* 24px – timer segments */
   --radius-full: 9999px;
 }
 
@@ -282,9 +283,10 @@ body {
   padding: var(--space-md);
   padding-top: calc(4px + var(--space-md));
   background: var(--color-bg-muted);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-2xl);
   transition: background 0.4s ease, padding 0.4s ease, opacity 0.4s ease;
   position: relative;
+  overflow: hidden;
 }
 
 /* Inactive segment: darker and smaller */
@@ -401,7 +403,7 @@ body {
   top: 0;
   height: 4px;
   background: var(--color-border-subtle);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
   overflow: hidden;
   transition: opacity 0.4s ease;
 }
@@ -410,7 +412,7 @@ body {
   height: 100%;
   width: calc((1 - var(--progress, 0)) * 100%);
   margin-left: auto;
-  border-radius: 0 var(--radius-lg) 0 0;
+  border-radius: 0 var(--radius-2xl) 0 0;
   transition: width 0.25s ease;
 }
 
