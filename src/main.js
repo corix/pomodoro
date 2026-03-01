@@ -79,6 +79,8 @@ const el = {
   progressWork: document.getElementById('progress-work'),
   progressBreak: document.getElementById('progress-break'),
   muteBtn: document.getElementById('mute-btn'),
+  glow: document.getElementById('glow'),
+  glowTransition: document.getElementById('glow-transition'),
 };
 
 let state = {
@@ -91,6 +93,8 @@ let state = {
   intervalId: null,
   muted: false,
 };
+
+let glowPulseTimeoutId = null;
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -230,6 +234,31 @@ function render() {
   el.progressBreak.style.setProperty('--progress', String(breakProgress));
 }
 
+function triggerGlowPulse() {
+  if (!el.glow) return;
+  if (glowPulseTimeoutId !== null) {
+    clearTimeout(glowPulseTimeoutId);
+    glowPulseTimeoutId = null;
+  }
+  const color = state.currentMode === 'work' ? 'var(--color-mode-work)' : 'var(--color-mode-break)';
+  el.glow.style.setProperty('--glow-color', color);
+  el.glow.classList.remove('glow--pulse');
+  el.glow.offsetHeight; // reflow so animation can restart
+  el.glow.classList.add('glow--pulse');
+  glowPulseTimeoutId = setTimeout(() => {
+    el.glow.classList.remove('glow--pulse');
+    glowPulseTimeoutId = null;
+  }, 2000);
+}
+
+function triggerTransitionGlow() {
+  if (!el.glowTransition) return;
+  el.glowTransition.classList.remove('glow--transition-active');
+  el.glowTransition.offsetHeight; // reflow so animation can restart
+  el.glowTransition.classList.add('glow--transition-active');
+  setTimeout(() => el.glowTransition.classList.remove('glow--transition-active'), 5000);
+}
+
 function tick() {
   const remaining = getTimeRemaining();
   if (remaining <= 0) return;
@@ -238,8 +267,10 @@ function tick() {
   if (nowRemaining >= 1 && nowRemaining <= 5) {
     const pentatonic = [784, 659, 587, 523, 440];
     playBeep({ frequency: pentatonic[5 - nowRemaining], duration: 0.5 });
+    triggerGlowPulse();
   }
   if (nowRemaining <= 0) {
+    triggerTransitionGlow();
     playDingDong();
     setTimeRemaining(getDuration(state.currentMode));
     state.currentMode = state.currentMode === 'work' ? 'break' : 'work';

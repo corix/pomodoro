@@ -38,6 +38,10 @@
   --color-success-shadow: #15803d;
   --color-error-shadow: #b91c1c;
 
+  /* Transition (timer hit zero) – neutral, bright */
+  --color-transition: #fafafa;
+  --color-transition-bg: rgba(250, 250, 250, 0.25);
+
   /* ─── Spacing (xs → xl) ─── */
   --space-xs: 0.25rem;   /* 4px */
   --space-sm: 0.5rem;    /* 8px */
@@ -90,6 +94,55 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+}
+
+/* Background glow – pulses in time with countdown sounds */
+.glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse 150% 110% at 50% 50%,
+    var(--glow-color, var(--color-mode-work)) 0%,
+    transparent 62%
+  );
+  transition: opacity 0.5s ease-out;
+}
+.glow.glow--pulse {
+  animation: glow-pulse 2s ease-out forwards;
+}
+@keyframes glow-pulse {
+  0% { opacity: 0; transform: scale(0.96); }
+  12% { opacity: 0.1; transform: scale(1.04); }
+  22% { opacity: 0.05; transform: scale(1.02); }
+  40% { opacity: 0.035; transform: scale(1.01); }
+  58% { opacity: 0.02; transform: scale(1.005); }
+  76% { opacity: 0.01; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+/* Neutral glow on timer transition (hit zero) */
+.glow--transition {
+  background: radial-gradient(
+    ellipse 150% 110% at 50% 50%,
+    var(--color-transition) 0%,
+    transparent 60%
+  );
+}
+.glow--transition.glow--transition-active {
+  animation: glow-transition 5s ease-out forwards;
+}
+@keyframes glow-transition {
+  0% { opacity: 0; transform: scale(0.97); }
+  6% { opacity: 0.22; transform: scale(1.03); }
+  25% { opacity: 0.1; transform: scale(1.01); }
+  45% { opacity: 0.06; transform: scale(1.005); }
+  65% { opacity: 0.03; transform: scale(1.002); }
+  82% { opacity: 0.012; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
 }
 
 #app {
@@ -97,6 +150,7 @@ body {
   max-width: 36rem;
   padding: var(--space-xl);
   position: relative;
+  z-index: 1;
 }
 
 .mute-corner {
